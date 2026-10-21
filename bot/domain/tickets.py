@@ -36,7 +36,7 @@ def calculate_tickets(confirmed_total: Decimal, ticket_price: Decimal) -> int:
 def build_preview(
     entered_amount: Decimal,
     *,
-    current_amount: Decimal | None,
+    current_amount: Decimal | int | str | None,
     current_tickets: int,
     ticket_price: Decimal,
 ) -> TicketPreview:

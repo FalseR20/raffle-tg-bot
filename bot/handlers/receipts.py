@@ -14,9 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import User
 from bot.handlers.participant import _current_draft
+from bot.handlers.views import send_closed
 from bot.services import notifications
 from bot.services.cards import send_application_card
-from bot.services.errors import NoReviewerAvailableError, ServiceError
+from bot.services.errors import (
+    NoReviewerAvailableError,
+    RaffleNotAcceptingError,
+    ServiceError,
+)
 from bot.services.ratelimit import RateLimiter
 from bot.services.receipt_upload import IncomingReceipt, accept_receipt
 from bot.services.settings import RuntimeSettings
@@ -108,6 +113,10 @@ async def on_receipt(
             now=now,
         )
         await session.commit()
+    except RaffleNotAcceptingError:
+        await state.clear()
+        await send_closed(bot, message.chat.id, runtime_settings)
+        return
     except ServiceError as exc:
         from bot.services.errors import StorageError
 

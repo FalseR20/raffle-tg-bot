@@ -79,5 +79,9 @@ def format_money_export(amount: Decimal | int | str) -> str:
     return f"{Decimal(amount).quantize(Decimal('0.01')):.2f}"
 
 
-def decimal_or_zero(value: Decimal | None) -> Decimal:
-    return value if value is not None else Decimal("0.00")
+def decimal_or_zero(value: Decimal | int | str | None) -> Decimal:
+    if value is None:
+        return Decimal("0.00")
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
