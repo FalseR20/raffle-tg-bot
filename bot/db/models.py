@@ -216,7 +216,6 @@ class Raffle(TimestampMixin, Base):
 
 class RaffleOrganization(Base):
     __tablename__ = "raffle_organizations"
-    __table_args__ = (UniqueConstraint("raffle_id", "organization_id"),)
 
     raffle_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("raffles.id", ondelete="CASCADE"), primary_key=True

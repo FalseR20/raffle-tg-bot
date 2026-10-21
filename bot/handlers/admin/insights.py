@@ -138,7 +138,17 @@ async def on_integrity(
         return
     raffle = await raffles_repo.get_current(session)
     if raffle is None:
-        await callback.answer("Нет текущего розыгрыша", show_alert=True)
+        recent = await raffles_repo.list_all(session, limit=50)
+        raffle = next(
+            (
+                item
+                for item in recent
+                if item.status in {RaffleStatus.FINISHED, RaffleStatus.ARCHIVED}
+            ),
+            None,
+        )
+    if raffle is None:
+        await callback.answer("Нет розыгрыша для проверки", show_alert=True)
         return
     report = await check_raffle(session, raffle)
     await callback.answer()
