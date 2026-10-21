@@ -96,6 +96,22 @@ Relevant environment overrides:
 
 Unit tests never touch the network. Integration and concurrency tests use real PostgreSQL.
 
+## Manual smoke test (Telegram test bot)
+
+1. Create a test bot with BotFather and put its token in `BOT_TOKEN`; put your Telegram ID in
+   `ADMIN_IDS`.
+2. Create a private test group for organization review, add the bot, and copy its chat ID with
+   `/chatid` from the group (or from the group ID shown by Telegram).
+3. Start the bot, run `/admin`, create an organization with an active payment method and a
+   review chat, then create and activate a raffle.
+4. Open the bot from a second account, accept consent, choose the organization and method, enter
+   an amount, and upload a PDF/photo receipt.
+5. Confirm the receipt from the review chat (or from `/admin` → Applications in DM). Verify that
+   the user receives ticket numbers, `/my` shows ranges, and the card is edited.
+6. Finish the raffle, export CSV/XLSX/PDF, and record a winner.
+
+Never run a real production raffle against the test bot.
+
 ## Quality gates
 
 ```bash
