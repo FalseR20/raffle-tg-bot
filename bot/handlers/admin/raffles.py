@@ -38,7 +38,7 @@ from bot.services.raffles import (
 from bot.states import RaffleWizard
 from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
-from bot.utils.time import format_datetime, utcnow
+from bot.utils.time import datetime_input_example, format_datetime, utcnow
 
 router = Router(name="admin_raffles")
 router.callback_query.middleware(ManagersOnlyMiddleware())
@@ -494,10 +494,11 @@ async def on_extend_request(
     await state.set_state(RaffleWizard.extend_end)
     await state.update_data(raffle_id=raffle.id)
     await callback.answer()
+    example = escape_markdown_v2(datetime_input_example(utcnow(), runtime_settings.timezone))
     await notifications.send_text(
         bot,
         callback.message.chat.id,
-        "Введите новую дату окончания в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ\\.",
+        f"Введите новую дату окончания в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ\\. Например: {example}\\.",
         reply_markup=wizard_cancel(f"adm:raffle:{raffle.id}"),
     )
 

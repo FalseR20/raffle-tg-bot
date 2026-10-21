@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from aiogram import Bot, F, Router
 from aiogram.filters import StateFilter
@@ -42,7 +43,7 @@ from bot.services.raffles import (
 )
 from bot.states import RaffleEdit, RaffleWizard
 from bot.texts.markdown import escape_markdown_v2
-from bot.utils.time import utcnow
+from bot.utils.time import datetime_input_example, utcnow
 from bot.utils.url import normalize_optional_http_url
 
 router = Router(name="admin_raffle_wizard")
@@ -71,8 +72,8 @@ _PROMPTS = {
     "ticket_price": "Введите цену билета в BYN:",
     "min_amount": "Введите минимальную сумму заявки в BYN:",
     "prizes_count": "Введите количество призов \\(целое число\\):",
-    "start_at": "Введите дату и время начала в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ:",
-    "end_at": "Введите дату и время окончания в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ:",
+    "start_at": "Введите дату и время начала",
+    "end_at": "Введите дату и время окончания",
     "channel_url": "Введите ссылку на канал или отправьте «\\-», чтобы пропустить:",
     "channel_title": "Введите название канала или отправьте «\\-», чтобы пропустить:",
 }
@@ -108,14 +109,21 @@ async def _prompt(
     step: str,
     state: FSMContext,
     *,
+    tz: ZoneInfo | None = None,
     default_callback: str | None = None,
     default_text: str = "✅ По умолчанию",
 ) -> None:
     await state.set_state(getattr(RaffleWizard, step))
+    prompt = _PROMPTS[step]
+    if step in {"start_at", "end_at"}:
+        example = datetime_input_example(utcnow(), tz or ZoneInfo("UTC"))
+        prompt = (
+            f"{prompt} в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ\\. Например: {escape_markdown_v2(example)}\\."
+        )
     await notifications.send_text(
         bot,
         chat_id,
-        _PROMPTS[step],
+        prompt,
         reply_markup=wizard_input(
             "rw:cancel",
             default_callback=default_callback,
@@ -234,7 +242,7 @@ async def on_wizard_input(
             return
         data["prizes_count"] = prizes
         await state.update_data(**data)
-        await _prompt(bot, message.chat.id, "start_at", state)
+        await _prompt(bot, message.chat.id, "start_at", state, tz=runtime_settings.timezone)
         return
     if step == "start_at":
         try:
@@ -243,7 +251,7 @@ async def on_wizard_input(
             await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
             return
         await state.update_data(**data)
-        await _prompt(bot, message.chat.id, "end_at", state)
+        await _prompt(bot, message.chat.id, "end_at", state, tz=runtime_settings.timezone)
         return
     if step == "end_at":
         try:
@@ -531,6 +539,7 @@ async def on_edit_field(
     bot: Bot,
     session: AsyncSession,
     permissions: Permissions,
+    runtime_settings,
     state: FSMContext,
 ) -> None:
     if callback.message is None or callback.data is None:
@@ -566,15 +575,19 @@ async def on_edit_field(
     await state.set_state(RaffleEdit.value)
     await state.update_data(raffle_id=raffle.id, field=field)
     await callback.answer()
+    end_at_example = escape_markdown_v2(datetime_input_example(utcnow(), runtime_settings.timezone))
     prompt = {
         "title": "Введите новое название:",
         "description": "Введите новое описание:",
         "ticket_price": "Введите новую цену билета:",
         "min_amount": "Введите новую минимальную сумму:",
         "prizes_count": "Введите новое количество призов:",
-        "end_at": "Введите новую дату окончания: ДД\\.ММ\\.ГГГГ ЧЧ:ММ",
-        "channel_url": "Введите ссылку на канал:",
-        "channel_title": "Введите название канала:",
+        "end_at": (
+            "Введите новую дату окончания в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ\\. "
+            f"Например: {end_at_example}\\."
+        ),
+        "channel_url": "Введите ссылку на канал или «\\-», чтобы убрать:",
+        "channel_title": "Введите название канала или «\\-», чтобы убрать:",
     }.get(field, "Введите новое значение:")
     await notifications.send_text(bot, callback.message.chat.id, prompt)
 

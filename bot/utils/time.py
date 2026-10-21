@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 
@@ -30,3 +30,10 @@ def format_date(value: datetime | None, tz: ZoneInfo) -> str:
     if value is None:
         return "—"
     return to_timezone(value, tz).strftime("%d.%m.%Y")
+
+
+def datetime_input_example(value: datetime, tz: ZoneInfo) -> str:
+    """Format the next whole hour in ``tz`` for an input hint."""
+    local = to_timezone(value, tz)
+    next_hour = local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    return next_hour.strftime("%d.%m.%Y %H:%M")

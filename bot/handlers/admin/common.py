@@ -17,7 +17,7 @@ from bot.services import notifications
 from bot.services.permissions import Permissions
 from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
-from bot.utils.time import to_timezone
+from bot.utils.time import datetime_input_example, to_timezone, utcnow
 
 
 def is_private(event: TelegramObject) -> bool:
@@ -62,7 +62,7 @@ def parse_decimal(raw: str) -> Decimal:
     return value.quantize(Decimal("0.01"))
 
 
-def parse_datetime(raw: str, tz: ZoneInfo) -> datetime:
+def parse_datetime(raw: str, tz: ZoneInfo, *, now: datetime | None = None) -> datetime:
     cleaned = raw.strip()
     formats = ("%d.%m.%Y %H:%M", "%d.%m.%Y", "%Y-%m-%d %H:%M", "%Y-%m-%d")
     for fmt in formats:
@@ -73,7 +73,8 @@ def parse_datetime(raw: str, tz: ZoneInfo) -> datetime:
         if fmt in {"%d.%m.%Y", "%Y-%m-%d"}:
             parsed = parsed.replace(hour=23, minute=59)
         return parsed.replace(tzinfo=tz)
-    raise ValueError("Введите дату в формате ДД.ММ.ГГГГ ЧЧ:ММ.")
+    example = datetime_input_example(now or utcnow(), tz)
+    raise ValueError(f"Введите дату в формате ДД.ММ.ГГГГ ЧЧ:ММ, например {example}.")
 
 
 def format_dt(value: datetime, tz: ZoneInfo) -> str:
