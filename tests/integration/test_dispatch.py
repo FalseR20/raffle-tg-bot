@@ -241,3 +241,7 @@ async def test_dispatch_smoke(session_factory, env_settings):
     summary = "\n".join(text for _, text, _ in bot.messages)
     assert "Подтверждённая сумма" in summary
     assert "1 билет" in summary
+
+    bot.answered.clear()
+    await dp.feed_update(bot, _callback(500, "adm:menu", 16))
+    assert any("нет доступа" in text for text in bot.answered)
