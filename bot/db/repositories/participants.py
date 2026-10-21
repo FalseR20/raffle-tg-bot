@@ -51,6 +51,7 @@ async def get_locked(session: AsyncSession, raffle_id: int, user_id: int) -> Par
         )
         .with_for_update()
         .options(selectinload(ParticipantTotal.user))
+        .execution_options(populate_existing=True)
     )
     total = (await session.execute(stmt)).scalar_one()
     return total

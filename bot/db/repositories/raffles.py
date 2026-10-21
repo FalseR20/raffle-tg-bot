@@ -124,7 +124,12 @@ async def count_applications(session: AsyncSession, raffle_id: int) -> int:
 
 
 async def lock(session: AsyncSession, raffle_id: int) -> Raffle | None:
-    stmt = select(Raffle).where(Raffle.id == raffle_id).with_for_update()
+    stmt = (
+        select(Raffle)
+        .where(Raffle.id == raffle_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     return (await session.execute(stmt)).scalar_one_or_none()
 
 

@@ -220,6 +220,9 @@ async def test_revision_preserves_original_submitted_at(session_factory):
         application = await _pending_application(
             session, status=ApplicationStatus.REVISION_REQUESTED, submitted=original
         )
+        # The original draft is older than the draft TTL. That must not block
+        # an already submitted application from uploading a revised receipt.
+        application.created_at = datetime.now(UTC) - timedelta(days=2)
     async with session_scope(session_factory) as session:
         application = await session.get(type(application), application.id)
         result = await accept_receipt(

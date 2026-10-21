@@ -95,10 +95,18 @@ async def get_by_payment_code(
 
 
 async def get_locked(session: AsyncSession, application_id: int) -> Application | None:
-    """Lock the application row (first lock in the financial lock order)."""
-    stmt = _with_relations(
-        select(Application).where(Application.id == application_id)
-    ).with_for_update(of=Application)
+    """Lock the application row (first lock in the financial lock order).
+
+    ``populate_existing`` is essential here: the application is often loaded
+    before the lock is acquired (for example by a callback handler), and
+    SQLAlchemy otherwise returns the stale object from the identity map after
+    waiting for a concurrent transaction.
+    """
+    stmt = (
+        _with_relations(select(Application).where(Application.id == application_id))
+        .with_for_update(of=Application)
+        .execution_options(populate_existing=True)
+    )
     return (await session.execute(stmt)).scalar_one_or_none()
 
 

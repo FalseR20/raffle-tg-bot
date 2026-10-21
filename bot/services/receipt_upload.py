@@ -77,7 +77,13 @@ async def accept_receipt(
         raise RaffleNotAcceptingError(
             "Приём заявок завершён. Чек по незавершённому черновику больше не принимается."
         )
-    if current.created_at + applications_service.DRAFT_TTL <= now:
+    # Draft TTL applies only to applications that have not been submitted yet.
+    # A revision request concerns an already submitted application and must
+    # remain actionable regardless of how old the original draft is.
+    if (
+        current.status.value == "awaiting_receipt"
+        and current.created_at + applications_service.DRAFT_TTL <= now
+    ):
         raise InvalidStateError("Черновик устарел. Начните новую заявку.")
 
     data = await _download(download, incoming.file_id)

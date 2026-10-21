@@ -50,6 +50,7 @@ class RuntimeSettings:
     support_contact: str | None
     management_log_chat_id: int | None
     max_donation: Decimal
+    receipt_max_mb: int
     receipt_retention_days: int
     confirm_two_step: bool
     enable_random_draw: bool
@@ -73,6 +74,7 @@ def environment_defaults(env: Settings) -> RuntimeSettings:
         support_contact=env.support_contact,
         management_log_chat_id=env.management_log_chat_id,
         max_donation=env.max_donation,
+        receipt_max_mb=env.receipt_max_mb,
         receipt_retention_days=env.receipt_retention_days,
         confirm_two_step=env.confirm_two_step,
         enable_random_draw=env.enable_random_draw,

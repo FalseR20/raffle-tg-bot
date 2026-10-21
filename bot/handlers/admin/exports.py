@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import raffles as raffles_repo
 from bot.keyboards.admin import export_formats, exported_raffles
+from bot.logging import get_logger
 from bot.services import notifications
 from bot.services.errors import ExportError, ServiceError
 from bot.services.exports import ExportRequest, build_export, build_tickets_pdf
@@ -19,6 +20,12 @@ from bot.texts.markdown import escape_markdown_v2
 from bot.utils.time import utcnow
 
 router = Router(name="admin_exports")
+logger = get_logger(__name__)
+
+
+def export_caption(filename: str) -> str:
+    """Build a valid MarkdownV2 caption for an exported file."""
+    return f"📤 {escape_markdown_v2(filename)}\n\n⚠️ Файл содержит персональные данные\\."
 
 
 async def _list_raffles(callback: CallbackQuery, bot: Bot, session: AsyncSession) -> None:
@@ -155,13 +162,21 @@ async def on_export_do(
         await callback.answer("Файл больше 45 МБ, экспорт остановлен", show_alert=True)
         return
     await callback.answer("Файл готовится")
-    caption = "📤 " + export.filename + "\n\n⚠️ Файл содержит персональные данные\\."
-    await bot.send_document(
-        callback.message.chat.id,
-        BufferedInputFile(export.data, filename=export.filename),
-        caption=caption,
-        parse_mode="MarkdownV2",
-    )
+    try:
+        await bot.send_document(
+            callback.message.chat.id,
+            BufferedInputFile(export.data, filename=export.filename),
+            caption=export_caption(export.filename),
+            parse_mode="MarkdownV2",
+        )
+    except Exception:
+        logger.exception("Could not deliver export %s", export.filename)
+        await notifications.send_text(
+            bot,
+            callback.message.chat.id,
+            "❌ Не удалось отправить файл\\. Попробуйте ещё раз\\.",
+        )
+        return
     await audit_repo.log(
         session,
         entity_type="export",

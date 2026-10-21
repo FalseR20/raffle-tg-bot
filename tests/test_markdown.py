@@ -3,6 +3,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from bot.handlers.admin.exports import export_caption
 from bot.texts.markdown import (
     MarkdownError,
     escape_markdown_v2,
@@ -78,6 +79,11 @@ def test_to_plain_text_strips_markup_and_escapes():
     assert to_plain_text("*Жирный* и `код`\\. [сайт](https://x\\.y)") == (
         "Жирный и код. сайт (https://x.y)"
     )
+
+
+def test_export_caption_escapes_filename():
+    caption = export_caption("raffle_test_2026-10-21.xlsx")
+    assert is_valid_markdown_v2(caption)
 
 
 def test_admin_card_is_valid_markdown_for_hostile_names():

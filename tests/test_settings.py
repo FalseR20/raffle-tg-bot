@@ -64,3 +64,4 @@ async def test_database_timezone_override_is_loaded(session_factory, env_setting
         runtime = await load_runtime_settings(session, env_settings)
         assert runtime.timezone_name == "Europe/Moscow"
         assert runtime.max_donation == Decimal("123.45")
+        assert runtime.receipt_max_mb == env_settings.receipt_max_mb

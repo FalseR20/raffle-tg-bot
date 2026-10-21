@@ -72,6 +72,63 @@ async def test_two_reviewers_confirm_same_application_once(session_factory):
         assert len(confirmed) == 1
 
 
+async def test_two_reviewers_with_preloaded_application_confirm_once(session_factory):
+    async with session_scope(session_factory) as session:
+        user = await make_user(session, 500)
+        org = await make_organization(session)
+        raffle = await make_raffle(session, organizations=[org])
+        application = await make_application(
+            session, raffle=raffle, user=user, organization=org, amount=Decimal("5")
+        )
+
+    barrier = asyncio.Barrier(2)
+
+    async def preload_and_confirm(reviewer: Permissions):
+        async with session_factory() as session:
+            # This mirrors the real callback flow: the handler loads the
+            # application before the review service acquires the row lock.
+            preloaded = await apps_repo.get(session, application.id)
+            assert preloaded is not None
+            assert preloaded.status is ApplicationStatus.PENDING_REVIEW
+            await barrier.wait()
+            try:
+                result = await confirm_application(
+                    session,
+                    application_id=application.id,
+                    reviewer_id=reviewer.user_id,
+                    reviewer=reviewer,
+                    now=datetime.now(UTC),
+                )
+                await session.commit()
+                return result
+            except Exception:
+                await session.rollback()
+                raise
+
+    results = await asyncio.gather(
+        preload_and_confirm(ADMIN),
+        preload_and_confirm(ADMIN_2),
+        return_exceptions=True,
+    )
+    successes = [result for result in results if not isinstance(result, Exception)]
+    errors = [result for result in results if isinstance(result, Exception)]
+    assert len(successes) == 1
+    assert len(errors) == 1
+    assert isinstance(errors[0], AlreadyProcessedError)
+
+    async with session_factory() as session:
+        raffle_row = await session.get(Raffle, raffle.id)
+        assert raffle_row.last_ticket_number == 1
+        total = await session.get(ParticipantTotal, (raffle.id, user.id))
+        assert total.tickets_issued == 1
+        confirmed = (
+            await session.execute(select(Application).where(Application.id == application.id))
+        ).scalar_one()
+        assert confirmed.status is ApplicationStatus.CONFIRMED
+        assert confirmed.first_ticket_number == 1
+        assert confirmed.last_ticket_number == 1
+
+
 async def test_concurrent_same_user_payments_in_different_organizations(session_factory):
     async with session_scope(session_factory) as session:
         user = await make_user(session, 500)

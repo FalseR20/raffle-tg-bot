@@ -33,6 +33,7 @@ async def get_by_hash_locked(session: AsyncSession, token_hash: str) -> Invite |
         .where(Invite.token_hash == token_hash)
         .with_for_update(of=Invite)
         .options(selectinload(Invite.organization))
+        .execution_options(populate_existing=True)
     )
     return (await session.execute(stmt)).scalar_one_or_none()
 
