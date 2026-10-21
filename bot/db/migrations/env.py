@@ -17,7 +17,24 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
 
-database_url = os.environ.get("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+
+def _database_url_from_env_file() -> str | None:
+    env_file = os.path.join(os.getcwd(), ".env")
+    if not os.path.isfile(env_file):
+        return None
+    with open(env_file, encoding="utf-8") as handle:
+        for line in handle:
+            key, separator, value = line.strip().partition("=")
+            if separator and key == "DATABASE_URL" and value:
+                return value.strip().strip('"').strip("'")
+    return None
+
+
+database_url = (
+    os.environ.get("DATABASE_URL")
+    or _database_url_from_env_file()
+    or config.get_main_option("sqlalchemy.url")
+)
 if not database_url or not database_url.startswith("postgresql+asyncpg://"):
     raise RuntimeError("Alembic requires DATABASE_URL starting with postgresql+asyncpg://")
 

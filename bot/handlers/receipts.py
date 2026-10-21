@@ -16,7 +16,7 @@ from bot.db.models import User
 from bot.handlers.participant import _current_draft
 from bot.services import notifications
 from bot.services.cards import send_application_card
-from bot.services.errors import ServiceError
+from bot.services.errors import NoReviewerAvailableError, ServiceError
 from bot.services.ratelimit import RateLimiter
 from bot.services.receipt_upload import IncomingReceipt, accept_receipt
 from bot.services.settings import RuntimeSettings
@@ -28,7 +28,7 @@ from bot.texts.markdown import escape_markdown_v2
 router = Router(name="participant_receipts")
 
 
-@router.message(F.photo | F.document)
+@router.message(F.chat.type == "private", F.photo | F.document)
 async def on_receipt(
     message: Message,
     bot: Bot,
@@ -144,6 +144,13 @@ async def on_receipt(
         )
         await session.commit()
     except ServiceError as exc:
+        if isinstance(exc, NoReviewerAvailableError):
+            await notifications.send_text(
+                bot,
+                message.chat.id,
+                "Заявка принята, но сейчас нет второго проверяющего, который может "
+                "подтвердить оплату. Администратор уже уведомлён\\.",
+            )
         await notifications.notify_admins(
             bot,
             env_settings.admin_id_set,

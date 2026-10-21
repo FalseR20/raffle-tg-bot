@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -23,6 +25,7 @@ from bot.keyboards.admin import (
     applications_menu,
     participants_list,
 )
+from bot.services import applications as applications_service
 from bot.services import notifications
 from bot.services.cards import CardDeliveryError, send_receipt_to_chat
 from bot.services.permissions import Permissions
@@ -77,6 +80,33 @@ async def on_apps_menu(callback: CallbackQuery, bot: Bot, permissions: Permissio
         callback.message.chat.id,
         "📥 *Заявки*\n\nВыберите фильтр:",
         reply_markup=applications_menu(),
+    )
+
+
+@router.callback_query(F.data.regexp(r"^adm:orgapps:\d+$"))
+async def on_org_apps(
+    callback: CallbackQuery,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    runtime_settings,
+) -> None:
+    if callback.message is None or callback.data is None:
+        return
+    organization_id = int(callback.data.rsplit(":", 1)[1])
+    if organization_id not in permissions.org_rep_ids:
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+    await _send_list(
+        session,
+        bot,
+        chat_id=callback.message.chat.id,
+        permissions=permissions,
+        settings=runtime_settings,
+        filter_key="all",
+        raffle_id=None,
+        offset=0,
     )
 
 
@@ -152,7 +182,12 @@ async def _send_list(
     total = await apps_repo.count_filtered(session, filters)
     applications = await apps_repo.list_filtered(session, filters, limit=10, offset=offset)
     if not applications:
-        await notifications.send_text(bot, chat_id, "Заявок по этому фильтру нет\\.")
+        await notifications.send_text(
+            bot,
+            chat_id,
+            "Заявок по этому фильтру нет\\.",
+            reply_markup=applications_menu(),
+        )
         return
     lines = []
     for application in applications:
@@ -314,6 +349,69 @@ async def on_application_file(
         await callback.answer(str(exc)[:180], show_alert=True)
         return
     await callback.answer("Чек отправлен")
+
+
+@router.callback_query(F.data.regexp(r"^adm:app_notify:\d+$"))
+async def on_app_notify(
+    callback: CallbackQuery,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    runtime_settings: RuntimeSettings,
+) -> None:
+    if callback.message is None or callback.data is None:
+        return
+    application = await apps_repo.get(session, int(callback.data.rsplit(":", 1)[1]))
+    if application is None or not _can_view(permissions, application):
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
+    if application.status is ApplicationStatus.CONFIRMED:
+        total, tickets, ranges = await applications_service.user_totals(
+            session, application.raffle_id, application.user_id
+        )
+        text = ru.user_confirmation_text(
+            public_id=application.public_id,
+            amount=application.amount or Decimal("0.00"),
+            organization_name=application.organization.name,
+            total_amount=total,
+            new_numbers=(
+                str(application.first_ticket_number)
+                if application.tickets_awarded == 1
+                else f"{application.first_ticket_number}–{application.last_ticket_number}"
+            ),
+            total_tickets=tickets,
+            all_numbers=ru.ranges_display(ranges),
+            channel_title=runtime_settings.channel_title,
+            channel_url=runtime_settings.channel_url,
+        )
+    elif application.status is ApplicationStatus.REJECTED:
+        text = ru.rejection_text(
+            public_id=application.public_id,
+            reason=application.rejection_reason or "—",
+            support_contact=runtime_settings.support_contact,
+        )
+    else:
+        await callback.answer("Для этой заявки уведомление не предусмотрено", show_alert=True)
+        return
+    delivery = await notifications.send_text(bot, application.user_id, text)
+    if delivery.ok:
+        application.user_notified_at = utcnow()
+        application.notification_error = None
+    else:
+        application.notification_error = (delivery.error or "unknown")[:500]
+    await audit_repo.log(
+        session,
+        entity_type="application",
+        entity_id=application.id,
+        application_id=application.id,
+        raffle_id=application.raffle_id,
+        actor_id=permissions.user_id,
+        action="user_notification_resent",
+        payload={"delivered": delivery.ok},
+        at=utcnow(),
+    )
+    await session.commit()
+    await callback.answer("Уведомление отправлено" if delivery.ok else "Не удалось отправить")
 
 
 @router.callback_query(F.data.regexp(r"^adm:app_remind:\d+$"))

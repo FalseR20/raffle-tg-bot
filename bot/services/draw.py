@@ -156,6 +156,7 @@ async def run_random_draw(
         actor_id=actor.user_id,
         action="random_draw",
         payload={
+            "draw_id": secrets.token_hex(8),
             "algorithm": "uniform-eligible-ticket",
             "cap_per_ticket": cap,
             "prizes_count": raffle.prizes_count,

@@ -1,8 +1,12 @@
+from decimal import Decimal
+from zoneinfo import ZoneInfo
+
 import pytest
 
 from bot.texts.markdown import (
     MarkdownError,
     escape_markdown_v2,
+    escape_url,
     is_valid_markdown_v2,
     to_plain_text,
     validate_markdown_v2,
@@ -65,6 +69,11 @@ def test_payment_instructions_allow_copyable_values_and_formatting():
     validate_markdown_v2(instructions)
 
 
+def test_url_escaping_only_escapes_parentheses_and_backslashes():
+    assert escape_url("https://t.me/channel_a?x=1&y=2") == "https://t.me/channel_a?x=1&y=2"
+    assert escape_url("https://example.org/a)b") == "https://example.org/a\\)b"
+
+
 def test_to_plain_text_strips_markup_and_escapes():
     assert to_plain_text("*Жирный* и `код`\\. [сайт](https://x\\.y)") == (
         "Жирный и код. сайт (https://x.y)"
@@ -78,12 +87,12 @@ def test_admin_card_is_valid_markdown_for_hostile_names():
         user_mention=escape_markdown_v2("@user (Иван_*Петров*)"),
         organization_name='Org "A" [test]',
         payment_method_title="Card.BYN",
-        amount=__import__("decimal").Decimal("6"),
-        current_amount=__import__("decimal").Decimal("9"),
+        amount=Decimal("6"),
+        current_amount=Decimal("9"),
         preview_delta=2,
         preview_tickets=3,
         submitted_at=None,
-        tz=__import__("zoneinfo").ZoneInfo("Europe/Minsk"),
+        tz=ZoneInfo("Europe/Minsk"),
         raffle_title="Осень 2026",
     )
     validate_markdown_v2(text)

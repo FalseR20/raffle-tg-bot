@@ -224,3 +224,13 @@ async def test_stop_acceptance_then_finish_allowed(session_factory):
         raffle_row = await session.get(type(raffle), raffle.id)
         await stop_acceptance(session, actor=ADMIN, raffle=raffle_row, now=datetime.now(UTC))
         assert raffle_row.status is RaffleStatus.CLOSED
+
+
+async def test_activation_requires_active_payment_method(session_factory):
+    async with session_scope(session_factory) as session:
+        org = await make_organization(session, with_method=False)
+        raffle = await make_raffle(session, organizations=[org], status=RaffleStatus.DRAFT)
+    async with session_scope(session_factory) as session:
+        raffle = await session.get(type(raffle), raffle.id)
+        with pytest.raises(ValidationError):
+            await activate(session, actor=ADMIN, raffle=raffle, now=datetime.now(UTC))

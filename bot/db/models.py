@@ -290,6 +290,13 @@ class Application(TimestampMixin, Base):
             postgresql_where=text("receipt_file_unique_id IS NOT NULL"),
         ),
         Index("ix_applications_created_at", "created_at"),
+        Index(
+            "uq_applications_active_draft",
+            "raffle_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status IN ('draft', 'awaiting_receipt')"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BIGINT, primary_key=True)

@@ -21,7 +21,7 @@ from bot.services.errors import ServiceError
 from bot.services.permissions import Permissions
 from bot.services.settings import RuntimeSettings
 from bot.texts import ru
-from bot.texts.markdown import escape_markdown_v2
+from bot.texts.markdown import escape_markdown_v2, escape_url
 
 router = Router(name="common")
 
@@ -203,8 +203,8 @@ async def cmd_rules(message: Message, runtime_settings: RuntimeSettings, bot: Bo
         bot,
         message.chat.id,
         "Правила розыгрыша и политика конфиденциальности:\n\n"
-        f"[Правила]({escape_markdown_v2(runtime_settings.rules_url)})\n"
-        f"[Политика конфиденциальности]({escape_markdown_v2(runtime_settings.privacy_url)})",
+        f"[Правила]({escape_url(runtime_settings.rules_url)})\n"
+        f"[Политика конфиденциальности]({escape_url(runtime_settings.privacy_url)})",
     )
 
 

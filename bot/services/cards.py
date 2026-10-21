@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.enums import ApplicationStatus, RoleName
 from bot.db.models import Application
+from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import participants as participants_repo
 from bot.db.repositories import roles as roles_repo
@@ -328,11 +329,12 @@ async def send_receipt_to_chat(
     kwargs: dict = {}
     if thread_id is not None:
         kwargs["message_thread_id"] = thread_id
-    try:
-        await _send_by_file_id(bot, chat_id, application, **kwargs)
-        return
-    except TelegramBadRequest:
-        pass
+    if application.receipt_file_id:
+        try:
+            await _send_by_file_id(bot, chat_id, application, **kwargs)
+            return
+        except TelegramBadRequest:
+            pass
     if not application.receipt_object_key:
         raise CardDeliveryError("Чек недоступен: нет file_id и объекта в RustFS.")
     data = await storage.get(application.receipt_object_key)
@@ -354,8 +356,6 @@ async def resend_missing_cards(
     limit: int = 10,
 ) -> int:
     """Retry cards whose first delivery failed. Applications are never lost."""
-    from bot.db.repositories import applications as apps_repo
-
     filters = apps_repo.ApplicationFilters(
         statuses=(ApplicationStatus.PENDING_REVIEW, ApplicationStatus.REVISION_REQUESTED)
     )

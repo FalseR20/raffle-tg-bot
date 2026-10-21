@@ -80,39 +80,45 @@ was ambiguous, plus product questions that remain open. Update it when a decisio
     Applications, Participants, Tickets and Summary. Org representatives get no Participants
     sheet and only their organization's rows. CSV of participants is not a separate format in
     MVP. Files over 45 MB are refused rather than split.
-32. **PDF tickets** use DejaVu Sans, two columns × five rows per A4 page, no names,
+32. **Role assignment by forwarded message** is supported inside the add-role wizard: forward
+    the user's message instead of entering an ID. A Telegram ID can also create a stub user row
+    even if the person has not started the bot yet; notifications are best effort.
+33. **Logo field.** Organizations have `logo_file_id`, but the MVP admin editor does not expose
+    logo upload. This is an optional field and does not affect activation.
+34. **PDF tickets** use DejaVu Sans, two columns × five rows per A4 page, no names,
     organizations or personal data. The PDF is refused before `finished` and when there are no
     tickets. Font path can be set with `DEJAVU_FONT_PATH`.
-33. **Payment method editor** accepts raw MarkdownV2 and validates it before saving. Formatting
+35. **Payment method editor** accepts raw MarkdownV2 and validates it before saving. Formatting
     help is provided; plain text must escape reserved characters. The editor does not silently
     rewrite admin input, to avoid corrupting copyable values.
-34. **Raffle descriptions and rules** are plain text and are escaped for MarkdownV2 when shown.
+36. **Raffle descriptions and rules** are plain text and are escaped for MarkdownV2 when shown.
     Payment instructions are the only admin field rendered as MarkdownV2.
-35. **Slugs** are generated from titles (Cyrillic transliteration) and remain stable after
+37. **Slugs** are generated from titles (Cyrillic transliteration) and remain stable after
     creation, so export filenames do not change when a title is edited. Slugs must be unique.
-36. **Scheduled activation is revalidated.** A scheduled raffle that cannot start (another
+38. **Scheduled activation is revalidated.** A scheduled raffle that cannot start (another
     current raffle, missing organization chat, no active payment method) stays `scheduled` and
     admins are notified.
-37. **Editing locked fields.** Ticket price, minimum amount, prize count, start date and the
+39. **Editing locked fields.** Ticket price, minimum amount, prize count, start date and the
     organization set are locked after activation. With zero applications, the raffle can be
     returned to `draft` and reactivated. `end_at` may be extended until `finished`; extending a
     `closed` raffle with a future date returns it to `active`.
-38. **Delete** is allowed only for a `draft` with no applications.
-39. **Draft replacement.** A user has at most one draft per raffle. Starting a new donation
+40. **Delete** is allowed only for a `draft` with no applications.
+41. **Draft replacement.** A user has at most one draft per raffle. Starting a new donation
     offers Continue / Start over / Cancel. Cancellation is atomic and fails if a reviewer has
-    already confirmed.
-40. **Rate limiting** uses in-process memory (single instance). Limits reset on restart; database
+    already confirmed. A partial unique index on `(raffle_id, user_id)` for `draft` and
+    `awaiting_receipt` makes this race-safe.
+42. **Rate limiting** uses in-process memory (single instance). Limits reset on restart; database
     constraints still enforce the 20-applications-per-raffle limit.
-41. **Webhook mode** is optional. When `WEBHOOK_URL` is set, the bot serves the webhook on
+43. **Webhook mode** is optional. When `WEBHOOK_URL` is set, the bot serves the webhook on
     `WEBHOOK_PORT` (default 8443) at `WEBHOOK_PATH`; otherwise it uses long polling.
-42. **Health endpoint** is a minimal HTTP server on `HEALTH_PORT` (default 8081). It is not a
+44. **Health endpoint** is a minimal HTTP server on `HEALTH_PORT` (default 8081). It is not a
     readiness probe for RustFS after startup.
-43. **Testing database** is separate (`raffle_test`) and recreated at pytest session start via
+45. **Testing database** is separate (`raffle_test`) and recreated at pytest session start via
     Alembic. There is no SQLite fallback.
-44. **No audit-log UI filters in MVP.** The panel shows the latest 20 entries and exports the
+46. **No audit-log UI filters in MVP.** The panel shows the latest 20 entries and exports the
     full log as CSV. Filtering is possible in the CSV.
-45. **Receipt ZIP archive** from the spec's phase 2 is not implemented.
-46. **Blocking users.** `users.is_blocked` prevents new drafts. There is no admin UI toggle in
+47. **Receipt ZIP archive** from the spec's phase 2 is not implemented.
+48. **Blocking users.** `users.is_blocked` prevents new drafts. There is no admin UI toggle in
     MVP; support can set it directly with a reviewed migration/script.
 
 ## Open questions for the product owner

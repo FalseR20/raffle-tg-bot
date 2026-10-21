@@ -15,6 +15,7 @@ from bot.db.models import Application
 from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import raffles as raffles_repo
+from bot.services import applications as applications_service
 from bot.services import receipts as receipts_service
 from bot.services.applications import attach_receipt
 from bot.services.errors import (
@@ -76,21 +77,15 @@ async def accept_receipt(
         raise RaffleNotAcceptingError(
             "Приём заявок завершён. Чек по незавершённому черновику больше не принимается."
         )
+    if current.created_at + applications_service.DRAFT_TTL <= now:
+        raise InvalidStateError("Черновик устарел. Начните новую заявку.")
 
     data = await _download(download, incoming.file_id)
     if len(data) > max_bytes:
         raise ReceiptError("Файл слишком большой.")
 
     if incoming.is_photo:
-        receipts_service.inspect_photo(size=len(data), max_bytes=max_bytes)
-        info = receipts_service.ReceiptInfo(
-            receipt_type=ReceiptType.PHOTO,
-            mime="image/jpeg",
-            extension="jpg",
-            size=len(data),
-        )
-        if not data.startswith(receipts_service.JPEG_MAGIC):
-            raise ReceiptError("Фотография повреждена.")
+        info = receipts_service.validate_photo_data(data, max_bytes=max_bytes)
     else:
         info = receipts_service.inspect_document(
             data=data,
@@ -136,6 +131,7 @@ async def accept_receipt(
         with contextlib.suppress(StorageError):
             await storage.delete(object_key)
         if isinstance(exc, SAIntegrityError):
+            await session.rollback()
             raise ReceiptError("Этот чек уже был загружен в другой заявке.") from exc
         raise
 

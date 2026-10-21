@@ -62,15 +62,6 @@ def instructions_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def amount_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="✏️ Изменить сумму", callback_data="flow:change_amount")],
-            [InlineKeyboardButton(text="❌ Отменить", callback_data="flow:cancel")],
-        ]
-    )
-
-
 def receipt_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -86,19 +77,7 @@ def draft_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="▶️ Продолжить", callback_data="draft:continue")],
             [InlineKeyboardButton(text="🔄 Начать заново", callback_data="draft:restart")],
             [InlineKeyboardButton(text="❌ Отменить черновик", callback_data="draft:cancel")],
-        ]
-    )
-
-
-def application_actions(application_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="❌ Отменить заявку", callback_data=f"my:cancel:{application_id}"
-                )
-            ],
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data="my:list")],
+            [InlineKeyboardButton(text="🎟 Мои заявки", callback_data="my:list")],
         ]
     )
 

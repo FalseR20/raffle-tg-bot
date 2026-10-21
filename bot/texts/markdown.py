@@ -24,6 +24,12 @@ def escape_markdown_v2(value: object) -> str:
     return "".join(f"\\{char}" if char in SPECIAL_CHARS else char for char in text)
 
 
+def escape_url(value: object) -> str:
+    """Escape only the characters Telegram requires inside a link URL."""
+    text = "" if value is None else str(value)
+    return text.replace("\\", "\\\\").replace(")", "\\)")
+
+
 def _find_unescaped(text: str, char: str, start: int) -> int:
     index = start
     while index < len(text):

@@ -622,7 +622,7 @@ async def on_amount(
         preview_delta=preview.delta,
     )
     suggestion = suggest_amount(preview, raffle.ticket_price, raffle.min_amount)
-    if suggestion is not None:
+    if suggestion is not None and suggestion <= runtime_settings.max_donation:
         text += (
             "\n\n💡 Чтобы использовать остаток полностью, можно отправить "
             f"{escape_markdown_v2(format_money(suggestion))} BYN\\."

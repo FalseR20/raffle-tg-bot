@@ -61,6 +61,20 @@ def inspect_photo(*, size: int, max_bytes: int) -> ReceiptInfo:
     )
 
 
+def validate_photo_data(data: bytes, *, max_bytes: int) -> ReceiptInfo:
+    """Validate a Telegram photo, including JPEG structure."""
+    _assert_size(len(data), max_bytes)
+    if not data.startswith(JPEG_MAGIC):
+        raise ReceiptError("Фотография повреждена.")
+    _validate_image(data, expected_format="JPEG")
+    return ReceiptInfo(
+        receipt_type=ReceiptType.PHOTO,
+        mime="image/jpeg",
+        extension="jpg",
+        size=len(data),
+    )
+
+
 def inspect_document(
     *,
     data: bytes,
@@ -72,13 +86,14 @@ def inspect_document(
     _assert_size(size, max_bytes)
     if len(data) != size:
         size = len(data)
+        _assert_size(size, max_bytes)
     mime = (declared_mime or "").split(";")[0].strip().lower()
     extension = (
         (file_name or "").rsplit(".", 1)[-1].lower() if file_name and "." in file_name else ""
     )
 
     if data.startswith(PDF_MAGIC):
-        if mime not in ALLOWED_PDF_MIMES and mime != "application/octet-stream":
+        if mime and mime not in ALLOWED_PDF_MIMES and mime != "application/octet-stream":
             raise ReceiptError("Файл похож на PDF, но MIME-тип не совпадает.")
         if extension and extension != "pdf":
             raise ReceiptError("Расширение PDF-файла должно быть .pdf.")
@@ -92,7 +107,7 @@ def inspect_document(
 
     if data.startswith(JPEG_MAGIC):
         _validate_image(data, expected_format="JPEG")
-        if mime not in ALLOWED_IMAGE_MIMES and mime != "application/octet-stream":
+        if mime and mime not in ALLOWED_IMAGE_MIMES and mime != "application/octet-stream":
             raise ReceiptError("Файл похож на JPEG, но MIME-тип не совпадает.")
         if extension and extension not in {"jpg", "jpeg"}:
             raise ReceiptError("Расширение изображения должно быть .jpg или .jpeg.")
@@ -105,7 +120,7 @@ def inspect_document(
 
     if data.startswith(PNG_MAGIC):
         _validate_image(data, expected_format="PNG")
-        if mime not in ALLOWED_IMAGE_MIMES and mime != "application/octet-stream":
+        if mime and mime not in ALLOWED_IMAGE_MIMES and mime != "application/octet-stream":
             raise ReceiptError("Файл похож на PNG, но MIME-тип не совпадает.")
         if extension and extension != "png":
             raise ReceiptError("Расширение изображения должно быть .png.")

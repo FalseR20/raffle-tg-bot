@@ -110,6 +110,22 @@ class Settings(BaseSettings):
             return None
         return value
 
+    @field_validator("tz")
+    @classmethod
+    def _validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except Exception as exc:
+            raise ValueError(f"Unknown timezone: {value}") from exc
+        return value
+
+    @field_validator("health_port", "webhook_port")
+    @classmethod
+    def _validate_port(cls, value: int) -> int:
+        if not 1 <= value <= 65535:
+            raise ValueError("Ports must be between 1 and 65535")
+        return value
+
     @field_validator("log_level")
     @classmethod
     def _normalize_log_level(cls, value: str) -> str:

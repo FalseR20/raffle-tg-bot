@@ -151,6 +151,8 @@ async def set_amount(
         raise RaffleNotAcceptingError()
     if application.payment_method_id is None:
         raise InvalidStateError("Сначала выберите способ оплаты.")
+    if application.created_at + DRAFT_TTL <= now:
+        raise InvalidStateError("Черновик устарел. Начните новую заявку.")
     if amount < min_amount:
         raise ValidationError("Сумма меньше минимальной.")
     if amount > max_amount:

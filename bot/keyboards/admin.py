@@ -446,7 +446,8 @@ def payment_method_card(organization_id: int, method_id: int, active: bool) -> I
             [
                 InlineKeyboardButton(
                     text="👁 Предпросмотр", callback_data=f"adm:method_preview:{method_id}"
-                )
+                ),
+                InlineKeyboardButton(text="ℹ️ Форматирование", callback_data="adm:markup_help"),
             ],
             [
                 InlineKeyboardButton(
@@ -490,28 +491,6 @@ def roles_menu(permissions: Permissions) -> InlineKeyboardMarkup:
     )
     rows.append([InlineKeyboardButton(text="🔗 Приглашения", callback_data="adm:invites")])
     rows.append([InlineKeyboardButton(text="⬅️ В меню", callback_data="adm:menu")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def add_role_menu(role: str, permissions: Permissions) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text="🆔 По Telegram ID", callback_data=f"adm:role_add_id:{role}")],
-        [
-            InlineKeyboardButton(
-                text="🔗 Создать приглашение", callback_data=f"adm:role_invite:{role}"
-            )
-        ],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="adm:roles")],
-    ]
-    if role == "org_rep":
-        rows.insert(
-            2,
-            [
-                InlineKeyboardButton(
-                    text="📨 Переслать сообщение", callback_data="adm:role_forward:org_rep"
-                )
-            ],
-        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -587,10 +566,6 @@ def winners_menu(raffle_id: int) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="adm:draw")],
         ]
     )
-
-
-def org_rep_applications(organization_id: int) -> InlineKeyboardMarkup:
-    return applications_menu(raffle_id=None)
 
 
 def wizard_cancel(callback: str = "rw:cancel") -> InlineKeyboardMarkup:
@@ -696,17 +671,4 @@ def participants_list(entries: list[tuple[int, str]]) -> InlineKeyboardMarkup:
         for user_id, label in entries
     ]
     rows.append([InlineKeyboardButton(text="⬅️ В меню", callback_data="adm:menu")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def application_navigation(prefix: str, offset: int, total: int) -> InlineKeyboardMarkup:
-    rows = []
-    nav = []
-    if offset > 0:
-        nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"{prefix}:{max(0, offset - 10)}"))
-    if offset + 10 < total:
-        nav.append(InlineKeyboardButton(text="➡️", callback_data=f"{prefix}:{offset + 10}"))
-    if nav:
-        rows.append(nav)
-    rows.append([InlineKeyboardButton(text="⬅️ К фильтрам", callback_data="adm:apps")])
     return InlineKeyboardMarkup(inline_keyboard=rows)

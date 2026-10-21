@@ -40,3 +40,24 @@ def test_apps_callback_parsing():
     assert parse_apps_filter("adm:apps_pending") == ("pending", 0)
     assert parse_apps_filter("adm:apps_all:42") == ("all", 42)
     assert parse_apps_filter("adm:apps_confirmed:7") == ("confirmed", 7)
+
+
+def test_permission_matrix():
+    from bot.db.enums import RoleName
+    from bot.services.permissions import Permissions, build_permissions
+
+    participant = build_permissions(1, [], env_admin_ids=frozenset())
+    assert not participant.has_admin_panel
+    organizer_role = SimpleNamespace(role=RoleName.ORGANIZER, organization_id=None)
+    organizer = build_permissions(2, [organizer_role], env_admin_ids=frozenset())
+    assert organizer.has_admin_panel
+    assert organizer.can_manage_raffles
+    assert organizer.can_manage_organizations
+    assert not organizer.can_manage_organizers
+    rep_role = SimpleNamespace(role=RoleName.ORG_REP, organization_id=7)
+    rep = build_permissions(3, [rep_role], env_admin_ids=frozenset())
+    assert rep.can_review_organization(7)
+    assert not rep.can_review_organization(8)
+    assert not rep.can_manage_raffles
+    admin = Permissions(user_id=4, is_admin=True)
+    assert admin.can_manage_organizers

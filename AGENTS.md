@@ -167,7 +167,10 @@ This repository uses [graphify](https://github.com/safishamsi/graphify) for arch
 exploration. From the project root:
 
 ```bash
-graphify .            # build graphify-out/graph.json and GRAPH_REPORT.md
+# In an agent session, rebuild with the Graphify skill:
+/graphify .
+
+# Query the generated graph from the command line:
 graphify query "How does confirmation lock rows?"
 graphify path "confirm_application" "ParticipantTotal"
 ```

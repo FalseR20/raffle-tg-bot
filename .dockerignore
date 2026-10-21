@@ -1,3 +1,4 @@
+.git/
 .venv/
 __pycache__/
 *.pyc
@@ -7,3 +8,6 @@ __pycache__/
 *.log
 receipts/
 tmp/
+graphify-out/
+backups/
+tests/

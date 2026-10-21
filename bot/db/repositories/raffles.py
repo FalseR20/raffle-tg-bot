@@ -29,6 +29,16 @@ async def get_current(session: AsyncSession) -> Raffle | None:
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def latest_scheduled(session: AsyncSession) -> Raffle | None:
+    stmt = (
+        select(Raffle)
+        .where(Raffle.status == RaffleStatus.SCHEDULED)
+        .order_by(Raffle.start_at)
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def list_all(
     session: AsyncSession, *, status: RaffleStatus | None = None, limit: int = 20
 ) -> list[Raffle]:

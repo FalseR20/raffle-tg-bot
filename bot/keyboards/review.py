@@ -63,7 +63,9 @@ def reject_reasons(application_id: int) -> InlineKeyboardMarkup:
             )
         ]
     )
-    rows.append([InlineKeyboardButton(text="↩️ Назад", callback_data=f"rev:back:{application_id}")])
+    rows.append(
+        [InlineKeyboardButton(text="↩️ Назад", callback_data=f"rev:cancel:{application_id}")]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

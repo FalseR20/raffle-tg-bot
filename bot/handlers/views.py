@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from aiogram import Bot
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.enums import ApplicationStatus, RaffleStatus
@@ -48,11 +49,20 @@ async def send_no_raffle(
 async def send_closed(
     bot: Bot, chat_id: int, settings: RuntimeSettings, *, message_thread_id: int | None = None
 ) -> None:
+    rows = [[InlineKeyboardButton(text="🎟 Мои заявки", callback_data="my:list")]]
+    if settings.channel_url:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"📣 {settings.channel_title or 'Канал'}", url=settings.channel_url
+                )
+            ]
+        )
     await notifications.send_text(
         bot,
         chat_id,
         ru.closed_text(settings.channel_title),
-        reply_markup=channel_keyboard(settings.channel_url, settings.channel_title),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
         message_thread_id=message_thread_id,
     )
 
@@ -69,8 +79,10 @@ async def send_start_screen(
 ) -> None:
     raffle = await current_raffle(session, now)
     if raffle is None:
-        await send_no_raffle(bot, chat_id, settings, message_thread_id=message_thread_id)
-        return
+        raffle = await raffles_repo.latest_scheduled(session)
+        if raffle is None:
+            await send_no_raffle(bot, chat_id, settings, message_thread_id=message_thread_id)
+            return
 
     if raffle.status is RaffleStatus.SCHEDULED:
         await notifications.send_text(

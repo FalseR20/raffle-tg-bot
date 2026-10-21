@@ -42,6 +42,7 @@ class BotScheduler:
         self.storage = storage
         self.scheduler = AsyncIOScheduler(timezone=env.timezone)
         self._chat_health: dict[int, bool] = {}
+        self._blocked_scheduled: set[int] = set()
 
     async def tick(self) -> None:
         report = None
@@ -51,7 +52,14 @@ class BotScheduler:
         except Exception:
             logger.exception("Lifecycle tick failed")
         if report is not None:
-            if report.activated or report.closed or report.blocked:
+            new_blocked = [
+                (raffle, reason)
+                for raffle, reason in report.blocked
+                if raffle.id not in self._blocked_scheduled
+            ]
+            self._blocked_scheduled = {raffle.id for raffle, _ in report.blocked}
+            if report.activated or report.closed or new_blocked:
+                report.blocked = new_blocked
                 await notify_lifecycle_admins(self.bot, self.env.admin_id_set, report)
             if report.expired_drafts:
                 logger.info("Expired %s drafts", len(report.expired_drafts))

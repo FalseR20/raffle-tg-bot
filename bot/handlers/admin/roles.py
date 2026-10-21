@@ -174,7 +174,7 @@ async def on_add_role(
     )
 
 
-@router.message(RoleWizard.organizer_id, F.text)
+@router.message(RoleWizard.organizer_id, F.text, ~F.forward_from)
 async def on_organizer_id(
     message: Message,
     bot: Bot,
@@ -237,7 +237,7 @@ async def on_org_rep_forward(
     )
 
 
-@router.message(RoleWizard.org_rep_id, F.text)
+@router.message(RoleWizard.org_rep_id, F.text, ~F.forward_from)
 async def on_org_rep_id(
     message: Message,
     bot: Bot,
@@ -334,6 +334,9 @@ async def on_role_org(
     if mode == "org_rep":
         data = await state.get_data()
         target_id = int(data.get("target_id", 0))
+        if target_id <= 0:
+            await callback.answer("Сначала укажите пользователя", show_alert=True)
+            return
         await state.clear()
         await callback.answer()
         await _assign_by_id(

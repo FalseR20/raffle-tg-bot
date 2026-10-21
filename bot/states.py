@@ -12,7 +12,6 @@ class ParticipantFlow(StatesGroup):
 
 class ReviewFlow(StatesGroup):
     reject_reason = State()
-    void_reason = State()
 
 
 class RaffleWizard(StatesGroup):
@@ -26,7 +25,6 @@ class RaffleWizard(StatesGroup):
     channel_url = State()
     channel_title = State()
     organizations = State()
-    confirm = State()
     extend_end = State()
 
 
@@ -55,9 +53,6 @@ class PaymentMethodWizard(StatesGroup):
 class RoleWizard(StatesGroup):
     organizer_id = State()
     org_rep_id = State()
-    invite_role = State()
-    invite_organization = State()
-    forward = State()
 
 
 class SettingsWizard(StatesGroup):
@@ -71,7 +66,3 @@ class ApplicationSearch(StatesGroup):
 class WinnerWizard(StatesGroup):
     place = State()
     ticket = State()
-
-
-class ExportWizard(StatesGroup):
-    include_all = State()

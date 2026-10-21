@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from bot.domain.money import format_money
 from bot.domain.tickets import compress_ranges
 from bot.texts.markdown import escape_markdown_v2 as esc
+from bot.texts.markdown import escape_url
 from bot.utils.time import format_datetime
 
 
@@ -68,8 +69,8 @@ def consent_text(
 ) -> str:
     text = (
         "Чтобы участвовать, примите правила розыгрыша и политику конфиденциальности\\.\n\n"
-        f"[Правила розыгрыша]({esc(rules_url)})\n"
-        f"[Политика конфиденциальности]({esc(privacy_url)})\n\n"
+        f"[Правила розыгрыша]({escape_url(rules_url)})\n"
+        f"[Политика конфиденциальности]({escape_url(privacy_url)})\n\n"
         f"Версия правил: {esc(rules_version)}\\. Версия политики: {esc(privacy_version)}\\."
     )
     if age_required:
@@ -299,7 +300,7 @@ def user_confirmation_text(
     if channel_title and channel_url:
         text += (
             "\n⚠️ Пожалуйста, не забудьте подписаться на канал "
-            f"[«{esc(channel_title)}»]({esc(channel_url)}) — именно там мы объявим "
+            f"[«{esc(channel_title)}»]({escape_url(channel_url)}) — именно там мы объявим "
             "результаты розыгрыша\\!"
         )
     return text

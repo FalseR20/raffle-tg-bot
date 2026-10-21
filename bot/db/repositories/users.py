@@ -87,14 +87,20 @@ async def set_publish_name_consent(
 
 
 async def search(session: AsyncSession, query: str, *, limit: int = 20) -> list[User]:
-    pattern = f"%{query.strip()}%"
+    raw = query.strip()
+    pattern = f"%{raw}%"
     stmt = select(User).where(
         User.username.ilike(pattern)
         | User.first_name.ilike(pattern)
         | User.last_name.ilike(pattern)
     )
-    if query.strip().isdigit():
-        stmt = stmt.union(select(User).where(User.id == int(query.strip())))
+    if raw.isdigit():
+        stmt = select(User).where(
+            (User.id == int(raw))
+            | User.username.ilike(pattern)
+            | User.first_name.ilike(pattern)
+            | User.last_name.ilike(pattern)
+        )
     stmt = stmt.order_by(User.last_seen_at.desc()).limit(limit)
     return list((await session.execute(stmt)).scalars().unique())
 

@@ -116,8 +116,14 @@ def compress_numbers(numbers: Iterable[int]) -> str:
 def compress_ranges(ranges: Sequence[tuple[int, int]]) -> str:
     if not ranges:
         return ""
-    parts = []
+    merged: list[tuple[int, int]] = []
     for first, last in sorted(ranges):
+        if merged and first <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], last))
+        else:
+            merged.append((first, last))
+    parts = []
+    for first, last in merged:
         if first == last:
             parts.append(str(first))
         else:
