@@ -10,6 +10,7 @@ from contextlib import suppress
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import BotCommand
 
 from bot.config import ConfigurationError, Settings, get_settings
 from bot.db.session import create_engine, create_session_factory, session_scope
@@ -52,6 +53,15 @@ async def _sync_admins(session_factory, env: Settings) -> tuple[list[int], list[
     if granted or revoked:
         logger.info("Admin sync: granted=%s revoked=%s", granted, revoked)
     return granted, revoked
+
+
+def bot_commands() -> list[BotCommand]:
+    return [
+        BotCommand(command="start", description="Участвовать в розыгрыше"),
+        BotCommand(command="my", description="Мои заявки"),
+        BotCommand(command="help", description="Помощь"),
+        BotCommand(command="admin", description="Админ-панель"),
+    ]
 
 
 async def run() -> None:
@@ -107,14 +117,7 @@ async def run() -> None:
     for user_id in admin_revoked:
         await notifications.send_text(bot, user_id, "Роль администратора в боте отозвана\\.")
     try:
-        await bot.set_my_commands(
-            [
-                ("start", "Участвовать в розыгрыше"),
-                ("my", "Мои заявки"),
-                ("help", "Помощь"),
-                ("admin", "Админ-панель"),
-            ]
-        )
+        await bot.set_my_commands(bot_commands())
     except Exception as exc:
         logger.warning("Could not set bot commands: %s", exc)
 
