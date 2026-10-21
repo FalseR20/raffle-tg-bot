@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -315,7 +316,13 @@ async def edit_review_card(
                     reply_markup=None,
                 )
         except TelegramBadRequest:
-            logger.warning("Plain-text card edit failed for %s", application.public_id)
+            with contextlib.suppress(TelegramBadRequest):
+                await bot.edit_message_text(
+                    chat_id=application.card_chat_id,
+                    message_id=application.card_message_id,
+                    text=to_plain_text(truncated),
+                    reply_markup=None,
+                )
 
 
 async def send_receipt_to_chat(

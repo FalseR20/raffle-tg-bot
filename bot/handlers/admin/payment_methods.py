@@ -388,6 +388,15 @@ async def on_method_up(
     if index > 0:
         previous = methods[index - 1]
         method.sort_order, previous.sort_order = previous.sort_order, method.sort_order
+        await audit_repo.log(
+            session,
+            entity_type="payment_method",
+            entity_id=method.id,
+            actor_id=permissions.user_id,
+            action="payment_method_updated",
+            payload={"field": "sort_order"},
+            at=utcnow(),
+        )
         await session.commit()
     await callback.answer("Порядок обновлён")
     organization = await orgs_repo.get(session, method.organization_id)
