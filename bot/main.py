@@ -46,11 +46,12 @@ async def _startup_checks(env: Settings, storage: ReceiptStorage, engine) -> Non
         raise
 
 
-async def _sync_admins(session_factory, env: Settings) -> None:
+async def _sync_admins(session_factory, env: Settings) -> tuple[list[int], list[int]]:
     async with session_scope(session_factory) as session:
         granted, revoked = await sync_admin_roles(session, env.admin_id_set, now=utcnow())
     if granted or revoked:
         logger.info("Admin sync: granted=%s revoked=%s", granted, revoked)
+    return granted, revoked
 
 
 async def run() -> None:

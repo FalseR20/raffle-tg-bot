@@ -252,3 +252,11 @@ async def test_consent_versions_require_reacceptance(session_factory, env_settin
 
         changed = replace(environment_defaults(env_settings), rules_version="2")
         assert not users_service.has_valid_consent(user, changed)
+
+
+async def test_startup_admin_sync_returns_lists(session_factory, env_settings):
+    from bot.main import _sync_admins
+
+    granted, revoked = await _sync_admins(session_factory, env_settings)
+    assert set(granted) == {100, 101}
+    assert revoked == []
