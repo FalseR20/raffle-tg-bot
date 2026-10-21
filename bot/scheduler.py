@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.config import Settings
 from bot.db.session import session_scope
+from bot.services.cards import resend_missing_cards
 from bot.services.lifecycle import (
     cleanup_receipt_objects,
     notify_lifecycle_admins,
@@ -48,7 +49,7 @@ class BotScheduler:
         except Exception:
             logger.exception("Lifecycle tick failed")
         if report is not None:
-            if report.activated or report.closed:
+            if report.activated or report.closed or report.blocked:
                 await notify_lifecycle_admins(self.bot, self.env.admin_id_set, report)
             if report.expired_drafts:
                 logger.info("Expired %s drafts", len(report.expired_drafts))
@@ -57,6 +58,16 @@ class BotScheduler:
             async with session_scope(self.session_factory) as session:
                 settings = await load_runtime_settings(session, self.env)
                 await retry_user_notifications(session, self.bot, settings=settings)
+            async with session_scope(self.session_factory) as session:
+                settings = await load_runtime_settings(session, self.env)
+                await resend_missing_cards(
+                    session,
+                    self.bot,
+                    settings=settings,
+                    storage=self.storage,
+                    env_admin_ids=self.env.admin_id_set,
+                    now=utcnow(),
+                )
         except Exception:
             logger.exception("Notification retry failed")
 

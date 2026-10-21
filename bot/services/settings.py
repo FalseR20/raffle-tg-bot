@@ -105,7 +105,7 @@ def parse_setting_value(key: str, raw: str | int | bool | None) -> Any:
 
     if key == "max_donation":
         try:
-            value = Decimal(str(raw))
+            value = Decimal(str(raw).replace(",", ".").strip())
         except (InvalidOperation, ValueError) as exc:
             raise ValidationError("Максимальная сумма должна быть числом.") from exc
         if value <= 0:
@@ -166,6 +166,8 @@ async def load_runtime_settings(session: AsyncSession, env: Settings) -> Runtime
         for key in stored
         if key in SETTING_KEYS
     }
+    if "timezone" in values:
+        values["timezone_name"] = values.pop("timezone")
     return RuntimeSettings(**{**defaults.__dict__, **values})
 
 

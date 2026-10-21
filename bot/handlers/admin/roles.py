@@ -17,6 +17,7 @@ from bot.keyboards.admin import (
     roles_list,
     roles_menu,
 )
+from bot.middlewares.admin import ManagersOnlyMiddleware
 from bot.services import invites as invites_service
 from bot.services import notifications
 from bot.services import roles as roles_service
@@ -28,6 +29,8 @@ from bot.texts.markdown import escape_markdown_v2
 from bot.utils.time import utcnow
 
 router = Router(name="admin_roles")
+router.callback_query.middleware(ManagersOnlyMiddleware())
+router.message.middleware(ManagersOnlyMiddleware())
 
 
 @router.callback_query(F.data == "adm:roles")

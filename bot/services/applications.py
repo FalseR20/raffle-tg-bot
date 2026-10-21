@@ -223,6 +223,8 @@ async def attach_receipt(
     application.reviewed_at = None
     application.rejection_reason = None
     application.notification_error = None
+    application.card_chat_id = None
+    application.card_message_id = None
     await session.flush()
     await audit_repo.log(
         session,

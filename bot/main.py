@@ -14,7 +14,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from bot.config import ConfigurationError, Settings, get_settings
 from bot.db.session import create_engine, create_session_factory, session_scope
 from bot.handlers import admin as admin_handlers
-from bot.handlers import common, my, participant, review
+from bot.handlers import common, my, participant, receipts, review
 from bot.health import start_health_server
 from bot.logging import configure_logging
 from bot.middlewares.auth import AuthMiddleware
@@ -90,6 +90,7 @@ async def run() -> None:
     dispatcher.include_router(my.router)
     dispatcher.include_router(review.router)
     dispatcher.include_router(participant.router)
+    dispatcher.include_router(receipts.router)
 
     try:
         await bot.set_my_commands(

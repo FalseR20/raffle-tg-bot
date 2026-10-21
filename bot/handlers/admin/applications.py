@@ -81,8 +81,8 @@ async def on_apps_filter(
     if callback.message is None or callback.data is None:
         return
     parts = callback.data.split(":")
-    filter_key = parts[0].split("_", 1)[1]
-    raffle_id = int(parts[1]) if len(parts) > 1 else 0
+    filter_key = parts[1].split("_", 1)[1]
+    raffle_id = int(parts[2]) if len(parts) > 2 else 0
     await callback.answer()
     await _send_list(
         session,

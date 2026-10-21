@@ -1,0 +1,34 @@
+from types import SimpleNamespace
+
+from bot.domain.ordering import randomized_organizations, stable_hash
+from bot.services.applications import PAYMENT_CODE_ALPHABET, PAYMENT_CODE_LENGTH
+
+
+def _orgs(count=6):
+    return [SimpleNamespace(id=index, name=f"Org {index}") for index in range(1, count + 1)]
+
+
+def test_payment_code_alphabet_excludes_confusing_characters():
+    assert PAYMENT_CODE_LENGTH == 5
+    assert not set("0O1I") & set(PAYMENT_CODE_ALPHABET)
+    assert len(PAYMENT_CODE_ALPHABET) >= 30
+
+
+def test_stable_hash_is_deterministic():
+    assert stable_hash(1, 2) == stable_hash(1, 2)
+    assert stable_hash(1, 2) != stable_hash(2, 1)
+
+
+def test_organization_order_is_stable_per_user_and_differs_between_users():
+    orgs = _orgs()
+    first = [org.id for org in randomized_organizations(orgs, user_id=1, raffle_id=2)]
+    again = [org.id for org in randomized_organizations(orgs, user_id=1, raffle_id=2)]
+    other = [org.id for org in randomized_organizations(orgs, user_id=3, raffle_id=2)]
+    assert first == again
+    assert first != other
+    assert sorted(first) == sorted(org.id for org in orgs)
+
+
+def test_single_organization_is_not_randomized():
+    orgs = _orgs(1)
+    assert randomized_organizations(orgs, user_id=1, raffle_id=2) == orgs

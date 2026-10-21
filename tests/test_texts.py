@@ -1,0 +1,162 @@
+from datetime import UTC, datetime
+from decimal import Decimal
+from types import SimpleNamespace
+from zoneinfo import ZoneInfo
+
+import pytest
+
+from bot.texts import ru
+from bot.texts.markdown import validate_markdown_v2
+
+TZ = ZoneInfo("Europe/Minsk")
+HOSTILE = 'Org "A" [x](y). ! _*~`'
+NOW = datetime(2026, 10, 21, 14, 35, tzinfo=UTC)
+
+
+def raffle():
+    return SimpleNamespace(
+        title=HOSTILE,
+        description="Описание с точкой. И тире - вот.",
+        ticket_price=Decimal("5.00"),
+        min_amount=Decimal("5.00"),
+        prizes_count=3,
+        end_at=NOW,
+        start_at=NOW,
+        channel_title='Канал "Тест" [x]',
+        channel_url="https://t.me/channel_a",
+    )
+
+
+TEXTS = [
+    ru.consent_text(
+        rules_url="https://example.org/rules?x=1&y=2",
+        privacy_url="https://example.org/privacy",
+        age_required=True,
+        rules_version="1.0",
+        privacy_version="2.0",
+    ),
+    ru.no_active_raffle_text('Канал "Тест"'),
+    ru.scheduled_raffle_text(raffle(), TZ),
+    ru.active_raffle_text(raffle(), TZ, has_consent=True),
+    ru.active_raffle_text(raffle(), TZ, has_consent=False),
+    ru.payment_methods_text(HOSTILE),
+    ru.payment_instructions_text(
+        organization_name=HOSTILE,
+        payment_method_title="Карта. BYN",
+        payment_instructions="Переведите:\n`1234 5678`\n\n*Получатель:* Иван",
+        payment_code="K7M2Q",
+        min_amount=Decimal("5"),
+        ticket_price=Decimal("5"),
+    ),
+    *[
+        ru.invalid_amount_text(code, min_amount=Decimal("5"), max_amount=Decimal("10000"))
+        for code in (
+            "below_min",
+            "above_max",
+            "too_many_decimals",
+            "not_a_number",
+            "non_positive",
+            "unknown",
+        )
+    ],
+    ru.amount_preview_text(
+        amount=Decimal("9"),
+        current_amount=Decimal("9"),
+        preview_amount=Decimal("18"),
+        preview_tickets=3,
+        preview_delta=2,
+    ),
+    ru.invalid_file_text(),
+    ru.file_too_large_text(20),
+    ru.pending_review_text(
+        public_id="A-2026-000123",
+        organization_name=HOSTILE,
+        payment_method_title="Карта. BYN",
+        amount=Decimal("6"),
+    ),
+    ru.admin_card_text(
+        public_id="A-2026-000123",
+        payment_code="K7M2Q",
+        user_mention=ru.esc("@user_name (Иван)"),
+        organization_name=HOSTILE,
+        payment_method_title="Card. BYN",
+        amount=Decimal("6"),
+        current_amount=Decimal("9"),
+        preview_delta=2,
+        preview_tickets=3,
+        submitted_at=NOW,
+        tz=TZ,
+        raffle_title=HOSTILE,
+    ),
+    ru.confirmed_card_text(
+        public_id="A-2026-000123",
+        reviewer='Иван "И" (x)',
+        confirmed_at=NOW,
+        tz=TZ,
+        ranges="2–3",
+        total_tickets=3,
+    ),
+    ru.rejected_card_text(
+        public_id="A-2026-000123",
+        reason="чек. не читается!",
+        reviewer="Иван",
+        rejected_at=NOW,
+        tz=TZ,
+    ),
+    ru.user_confirmation_text(
+        public_id="A-2026-000123",
+        amount=Decimal("6"),
+        organization_name=HOSTILE,
+        total_amount=Decimal("15"),
+        new_numbers="2–3",
+        total_tickets=3,
+        all_numbers="1, 2–3",
+        channel_title='Канал "Тест"',
+        channel_url="https://t.me/channel_a",
+    ),
+    ru.rejection_text(
+        public_id="A-2026-000123",
+        reason="платёж (не) найден.",
+        support_contact="@support.help",
+    ),
+    ru.revision_request_text("A-2026-000123"),
+    ru.closed_text('Канал "Тест"'),
+    ru.no_access_text(),
+    ru.use_dm_text(),
+    ru.my_summary_text(
+        raffle_title=HOSTILE,
+        confirmed_amount=Decimal("15"),
+        tickets=3,
+        ranges="1, 2–3",
+    ),
+    ru.application_line(
+        public_id="A-2026-000123",
+        organization=HOSTILE,
+        method="Карта. BYN",
+        amount=Decimal("9"),
+        status="на проверке.",
+        created_at=NOW,
+        tz=TZ,
+    ),
+]
+
+
+@pytest.mark.parametrize("text", TEXTS)
+def test_all_templates_are_valid_markdown(text):
+    validate_markdown_v2(text)
+
+
+def test_ranges_and_pluralization_in_texts():
+    assert "1, 2–3" in ru.my_summary_text(
+        raffle_title="X",
+        confirmed_amount=Decimal("15"),
+        tickets=3,
+        ranges="1, 2–3",
+    )
+    assert "2 номерка" in ru.amount_preview_text(
+        amount=Decimal("9"),
+        current_amount=Decimal("9"),
+        preview_amount=Decimal("18"),
+        preview_tickets=3,
+        preview_delta=2,
+    )

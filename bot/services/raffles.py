@@ -525,20 +525,27 @@ async def duplicate(
 
 async def process_schedule(
     session: AsyncSession, *, now: datetime
-) -> tuple[list[Raffle], list[Raffle]]:
+) -> tuple[list[Raffle], list[Raffle], list[tuple[Raffle, str]]]:
     """Apply scheduled starts and due deadlines.
 
-    Returns ``(activated, closed)`` raffles for notifications. A scheduled
-    raffle that cannot start because another raffle is current stays scheduled.
+    Returns ``(activated, closed, blocked)`` for notifications. A scheduled
+    raffle that cannot start because another raffle is current or because an
+    activation check fails stays scheduled and is reported as blocked.
     """
     activated: list[Raffle] = []
     closed: list[Raffle] = []
+    blocked: list[tuple[Raffle, str]] = []
 
     current = await raffles_repo.get_current(session)
     for raffle in await raffles_repo.scheduled_due(session):
         if raffle.start_at > now:
             continue
         if current is not None and current.id != raffle.id:
+            blocked.append((raffle, "Уже есть текущий розыгрыш."))
+            continue
+        problems = await activation_problems(session, raffle)
+        if problems:
+            blocked.append((raffle, problems[0].message))
             continue
         raffle.status = RaffleStatus.ACTIVE
         await session.flush()
@@ -560,7 +567,7 @@ async def process_schedule(
     for raffle in await raffles_repo.list_all(session, status=RaffleStatus.ACTIVE, limit=1000):
         if await close_due(session, raffle=raffle, now=now):
             closed.append(raffle)
-    return activated, closed
+    return activated, closed, blocked
 
 
 def is_accepting(raffle: Raffle | None, now: datetime) -> bool:

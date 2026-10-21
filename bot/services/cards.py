@@ -11,7 +11,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.enums import RoleName
+from bot.db.enums import ApplicationStatus, RoleName
 from bot.db.models import Application
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import participants as participants_repo
@@ -214,7 +214,7 @@ async def _send_management_copy(
     text = (
         "Копия карточки заявки "
         f"`{application.public_id}` в организации "
-        f"«{escape_markdown_v2(application.organization.name)}». "
+        f"«{escape_markdown_v2(application.organization.name)}»\\. "
         "Действия доступны в чате проверки\\."
     )
     await notifications.send_text(bot, chat_id, text)
@@ -317,3 +317,44 @@ async def send_receipt_to_chat(
         await bot.send_photo(chat_id, photo=upload, **kwargs)
     else:
         await bot.send_document(chat_id, document=upload, **kwargs)
+
+
+async def resend_missing_cards(
+    session: AsyncSession,
+    bot: Bot,
+    *,
+    settings: RuntimeSettings,
+    storage: ReceiptStorage,
+    env_admin_ids: frozenset[int],
+    now: datetime,
+    limit: int = 10,
+) -> int:
+    """Retry cards whose first delivery failed. Applications are never lost."""
+    from bot.db.repositories import applications as apps_repo
+
+    filters = apps_repo.ApplicationFilters(
+        statuses=(ApplicationStatus.PENDING_REVIEW, ApplicationStatus.REVISION_REQUESTED)
+    )
+    applications = await apps_repo.list_filtered(session, filters, limit=100)
+    delivered = 0
+    for application in applications:
+        if application.card_message_id is not None:
+            continue
+        try:
+            await send_application_card(
+                session,
+                bot,
+                application=application,
+                settings=settings,
+                storage=storage,
+                env_admin_ids=env_admin_ids,
+                now=now,
+            )
+            await session.commit()
+            delivered += 1
+        except Exception as exc:
+            logger.warning("Card retry failed for %s: %s", application.public_id, exc)
+            await session.rollback()
+        if delivered >= limit:
+            break
+    return delivered

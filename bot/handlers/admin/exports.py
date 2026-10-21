@@ -127,6 +127,9 @@ async def on_export_do(
     if not permissions.has_admin_panel:
         await callback.answer("Нет доступа", show_alert=True)
         return
+    if format_name == "pdf" and not permissions.can_manage_raffles:
+        await callback.answer("PDF билетов доступен только организатору", show_alert=True)
+        return
 
     try:
         if format_name == "pdf":
@@ -189,6 +192,9 @@ async def on_pdf_shortcut(
     permissions: Permissions,
 ) -> None:
     if callback.message is None or callback.data is None:
+        return
+    if not permissions.can_manage_raffles:
+        await callback.answer("Нет доступа", show_alert=True)
         return
     raffle = await raffles_repo.get(session, int(callback.data.rsplit(":", 1)[1]))
     if raffle is None:

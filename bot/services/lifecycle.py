@@ -27,13 +27,16 @@ from bot.utils.time import utcnow
 class LifecycleReport:
     activated: list = field(default_factory=list)
     closed: list = field(default_factory=list)
+    blocked: list = field(default_factory=list)
     expired_drafts: list = field(default_factory=list)
 
 
 async def run_lifecycle(session: AsyncSession, *, now: datetime) -> LifecycleReport:
-    activated, closed = await process_schedule(session, now=now)
+    activated, closed, blocked = await process_schedule(session, now=now)
     expired = await applications_service.expire_drafts(session, now=now)
-    return LifecycleReport(activated=activated, closed=closed, expired_drafts=expired)
+    return LifecycleReport(
+        activated=activated, closed=closed, blocked=blocked, expired_drafts=expired
+    )
 
 
 async def retry_user_notifications(
@@ -168,6 +171,13 @@ async def notify_lifecycle_admins(
             bot,
             admin_ids,
             f"⏹ Розыгрыш «{escape_markdown_v2(raffle.title)}» закрыт по расписанию\\.",
+        )
+    for raffle, reason in report.blocked:
+        await notifications.notify_admins(
+            bot,
+            admin_ids,
+            f"⚠️ Запланированный розыгрыш «{escape_markdown_v2(raffle.title)}» "
+            f"не запущен: {escape_markdown_v2(reason)}",
         )
 
 

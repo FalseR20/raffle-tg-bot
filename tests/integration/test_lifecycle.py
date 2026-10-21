@@ -57,7 +57,7 @@ async def test_deadline_is_applied_on_schedule_tick(session_factory):
             end_at=datetime.now(UTC) - timedelta(minutes=1),
         )
     async with session_scope(session_factory) as session:
-        activated, closed = await process_schedule(session, now=datetime.now(UTC))
+        activated, closed, _ = await process_schedule(session, now=datetime.now(UTC))
         assert not activated
         assert [item.id for item in closed] == [raffle.id]
     async with session_factory() as session:
@@ -78,13 +78,13 @@ async def test_scheduled_raffle_starts_and_respects_current(session_factory):
             end_at=datetime.now(UTC) + timedelta(days=1),
         )
     async with session_scope(session_factory) as session:
-        activated, _ = await process_schedule(session, now=datetime.now(UTC))
+        activated, _, _ = await process_schedule(session, now=datetime.now(UTC))
         assert not activated
     async with session_scope(session_factory) as session:
         current_row = await session.get(type(current), current.id)
         current_row.status = RaffleStatus.FINISHED
     async with session_scope(session_factory) as session:
-        activated, _ = await process_schedule(session, now=datetime.now(UTC))
+        activated, _, _ = await process_schedule(session, now=datetime.now(UTC))
         assert [item.id for item in activated] == [scheduled.id]
 
 

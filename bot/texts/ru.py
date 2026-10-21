@@ -175,10 +175,10 @@ def amount_preview_text(
     return (
         f"{esc(format_money(amount))} BYN\\. С учётом уже подтверждённых "
         f"{esc(format_money(current_amount))} BYN всего будет "
-        f"{esc(format_money(preview_amount))} BYN = {tickets_label(preview_tickets)}\\.\n"
+        f"{esc(format_money(preview_amount))} BYN \\= {tickets_label(preview_tickets)}\\.\n"
         f"После проверки чека вы получите ещё {numbers_label(preview_delta)}\\.\n\n"
         "📎 Пришлите чек одним файлом:\n"
-        "• фотографией (как фото в Telegram);\n"
+        "• фотографией \\(как фото в Telegram\\);\n"
         "• PDF\\-документом;\n"
         "• изображением JPEG/PNG, отправленным документом\\.\n\n"
         "На чеке должны быть видны получатель, сумма, дата и статус операции\\."
@@ -187,7 +187,7 @@ def amount_preview_text(
 
 def invalid_file_text() -> str:
     return (
-        "❌ Принимаются фото, PDF или изображение (JPEG/PNG) документом\\. "
+        "❌ Принимаются фото, PDF или изображение \\(JPEG/PNG\\) документом\\. "
         "Текст, стикеры и другие документы не подходят\\. "
         "Пришлите, пожалуйста, чек подходящим файлом\\."
     )
@@ -287,20 +287,20 @@ def user_confirmation_text(
     channel_url: str | None,
 ) -> str:
     text = (
-        "✅ *Оплата подтверждена!*\n\n"
+        "✅ *Оплата подтверждена\\!*\n\n"
         f"Заявка №{esc(public_id)}\\.\n"
         f"Вы пожертвовали *{esc(format_money(amount))} BYN* в "
         f"*{esc(organization_name)}*\\.\n\n"
         f"Всего подтверждено: *{esc(format_money(total_amount))} BYN*\\.\n"
         f"Новые номерки: *{esc(new_numbers)}*\\.\n"
         f"Всего у вас {tickets_label(total_tickets)}: *{esc(all_numbers)}*\\.\n\n"
-        "Желаем удачи!"
+        "Желаем удачи\\!"
     )
     if channel_title and channel_url:
         text += (
             "\n⚠️ Пожалуйста, не забудьте подписаться на канал "
             f"[«{esc(channel_title)}»]({esc(channel_url)}) — именно там мы объявим "
-            "результаты розыгрыша!"
+            "результаты розыгрыша\\!"
         )
     return text
 
@@ -325,14 +325,14 @@ def revision_request_text(public_id: str) -> str:
 def closed_text(channel_title: str | None) -> str:
     if channel_title:
         return (
-            "⛔ Приём заявок завершён! Розыгрыш закрыт, ожидайте результатов "
+            "⛔ Приём заявок завершён\\! Розыгрыш закрыт, ожидайте результатов "
             f"на канале «{esc(channel_title)}»\\."
         )
-    return "⛔ Приём заявок завершён! Розыгрыш закрыт, ожидайте результатов\\."
+    return "⛔ Приём заявок завершён\\! Розыгрыш закрыт, ожидайте результатов\\."
 
 
 def no_access_text() -> str:
-    return "У вас нет доступа к админ-панели\\."
+    return "У вас нет доступа к админ\\-панели\\."
 
 
 def use_dm_text() -> str:

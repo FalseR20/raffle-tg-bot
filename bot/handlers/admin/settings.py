@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import Settings
 from bot.keyboards.admin import settings_menu, wizard_cancel
+from bot.middlewares.admin import ManagersOnlyMiddleware
 from bot.services import notifications
 from bot.services.errors import ServiceError
 from bot.services.permissions import Permissions
@@ -24,6 +25,8 @@ from bot.texts.markdown import escape_markdown_v2
 from bot.utils.time import utcnow
 
 router = Router(name="admin_settings")
+router.callback_query.middleware(ManagersOnlyMiddleware())
+router.message.middleware(ManagersOnlyMiddleware())
 
 EDITABLE_KEYS = [
     "channel_url",

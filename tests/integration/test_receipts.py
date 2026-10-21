@@ -373,3 +373,60 @@ async def test_real_storage_upload_flow(session_factory, rustfs):
     stored = await rustfs.get(result.object_key)
     assert stored == data
     await rustfs.delete(result.object_key)
+
+
+async def test_photo_upload_uses_jpeg_and_largest_file(session_factory):
+    async with session_scope(session_factory) as session:
+        application = await _pending_application(session)
+    data = make_jpeg()
+    async with session_scope(session_factory) as session:
+        application = await session.get(type(application), application.id)
+        result = await accept_receipt(
+            session,
+            application=application,
+            user_id=500,
+            incoming=IncomingReceipt(
+                file_id="photo-id",
+                file_unique_id="photo-unique",
+                size=len(data),
+                is_photo=True,
+            ),
+            max_bytes=20 * 1024 * 1024,
+            download=lambda _: _async_value(data),
+            storage=FakeStorage(),
+            now=datetime.now(UTC),
+        )
+        assert result.receipt_type is ReceiptType.PHOTO
+        assert result.object_key.endswith(".jpg")
+        assert result.application.receipt_mime == "image/jpeg"
+
+
+async def test_awaiting_receipt_cannot_be_uploaded_after_close(session_factory):
+    from bot.db.enums import RaffleStatus
+    from bot.services.errors import RaffleNotAcceptingError
+
+    async with session_scope(session_factory) as session:
+        application = await _pending_application(session)
+        raffle = application.raffle
+        raffle.status = RaffleStatus.CLOSED
+    data = make_pdf()
+    async with session_scope(session_factory) as session:
+        application = await session.get(type(application), application.id)
+        with pytest.raises(RaffleNotAcceptingError):
+            await accept_receipt(
+                session,
+                application=application,
+                user_id=500,
+                incoming=IncomingReceipt(
+                    file_id="file",
+                    file_unique_id="closed-unique",
+                    size=len(data),
+                    is_photo=False,
+                    mime="application/pdf",
+                    file_name="receipt.pdf",
+                ),
+                max_bytes=20 * 1024 * 1024,
+                download=lambda _: _async_value(data),
+                storage=FakeStorage(),
+                now=datetime.now(UTC),
+            )
