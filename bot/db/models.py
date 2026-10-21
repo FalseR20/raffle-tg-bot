@@ -293,7 +293,15 @@ class Application(TimestampMixin, Base):
     )
 
     id: Mapped[int] = mapped_column(BIGINT, primary_key=True)
-    public_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    public_id: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        unique=True,
+        server_default=text(
+            "'A-' || to_char(now(), 'YYYY') || '-' || "
+            "lpad(nextval('application_public_id_seq')::text, 6, '0')"
+        ),
+    )
     payment_code: Mapped[str] = mapped_column(Text, nullable=False, index=True)
     raffle_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("raffles.id", ondelete="RESTRICT"), nullable=False
@@ -339,10 +347,10 @@ class Application(TimestampMixin, Base):
     user_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     notification_error: Mapped[str | None] = mapped_column(Text)
 
-    raffle: Mapped[Raffle] = relationship(lazy="joined")
-    user: Mapped[User] = relationship(lazy="joined")
-    organization: Mapped[Organization] = relationship(lazy="joined")
-    payment_method: Mapped[PaymentMethod | None] = relationship(lazy="joined")
+    raffle: Mapped[Raffle] = relationship(lazy="selectin")
+    user: Mapped[User] = relationship(lazy="selectin")
+    organization: Mapped[Organization] = relationship(lazy="selectin")
+    payment_method: Mapped[PaymentMethod | None] = relationship(lazy="selectin")
 
 
 class ParticipantTotal(Base):
@@ -366,7 +374,7 @@ class ParticipantTotal(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    user: Mapped[User] = relationship(lazy="joined")
+    user: Mapped[User] = relationship(lazy="selectin")
 
 
 class AuditLog(Base):
@@ -452,4 +460,4 @@ class Winner(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    application: Mapped[Application] = relationship(lazy="joined")
+    application: Mapped[Application] = relationship(lazy="selectin")

@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     channel_title: str = "Тетрадь с полями🪶"
     rules_url: str
     privacy_url: str
+    rules_version: str = "1"
+    privacy_version: str = "1"
     support_contact: str | None = None
     management_log_chat_id: int | None = None
 
