@@ -292,6 +292,7 @@ async def on_winners(
     if raffle is None:
         await callback.answer("Розыгрыш не найден", show_alert=True)
         return
+    await callback.answer()
     await _send_winners(
         bot,
         callback.message.chat.id,
