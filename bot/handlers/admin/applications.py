@@ -20,6 +20,7 @@ from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import participants as participants_repo
 from bot.db.repositories import raffles as raffles_repo
+from bot.db.repositories import users as users_repo
 from bot.keyboards.admin import (
     application_card,
     applications_menu,
@@ -32,7 +33,7 @@ from bot.services.permissions import Permissions
 from bot.services.settings import RuntimeSettings
 from bot.services.storage import ReceiptStorage
 from bot.services.users import display_name, mention
-from bot.states import ApplicationSearch
+from bot.states import ApplicationSearch, ParticipantSearch
 from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
 from bot.utils.time import format_datetime, utcnow
@@ -540,6 +541,48 @@ async def on_participants(
         reply_markup=participants_list(
             [(total.user_id, display_name(total.user)) for total in participants]
         ),
+    )
+
+
+@router.callback_query(F.data == "adm:part_search")
+async def on_participant_search(
+    callback: CallbackQuery, bot: Bot, permissions: Permissions, state: FSMContext
+) -> None:
+    if callback.message is None:
+        return
+    if not permissions.can_manage_raffles:
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await state.set_state(ParticipantSearch.query)
+    await callback.answer()
+    await notifications.send_text(
+        bot,
+        callback.message.chat.id,
+        "Введите Telegram ID, username или имя участника:",
+    )
+
+
+@router.message(ParticipantSearch.query, F.text)
+async def on_participant_search_query(
+    message: Message,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    state: FSMContext,
+) -> None:
+    if not permissions.can_manage_raffles:
+        return
+    query = (message.text or "").strip()
+    await state.clear()
+    users = await users_repo.search(session, query, limit=20) if query else []
+    if not users:
+        await notifications.send_text(bot, message.chat.id, "Участники не найдены\\.")
+        return
+    await notifications.send_text(
+        bot,
+        message.chat.id,
+        "👥 Найденные участники:",
+        reply_markup=participants_list([(user.id, display_name(user)) for user in users]),
     )
 
 

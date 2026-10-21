@@ -63,6 +63,10 @@ class ApplicationSearch(StatesGroup):
     query = State()
 
 
+class ParticipantSearch(StatesGroup):
+    query = State()
+
+
 class WinnerWizard(StatesGroup):
     place = State()
     ticket = State()

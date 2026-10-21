@@ -670,5 +670,6 @@ def participants_list(entries: list[tuple[int, str]]) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=label[:50], callback_data=f"adm:part:{user_id}")]
         for user_id, label in entries
     ]
+    rows.append([InlineKeyboardButton(text="🔎 Поиск участника", callback_data="adm:part_search")])
     rows.append([InlineKeyboardButton(text="⬅️ В меню", callback_data="adm:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
