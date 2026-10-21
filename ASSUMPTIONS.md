@@ -161,3 +161,5 @@ These do not block implementation; the safest defaults above are in use.
 This software is not legal advice. Before launch, a Belarusian lawyer should review raffle
 rules, charity/tax requirements, personal data processing, age restrictions, prize fulfillment
 and taxation. The bot does not publish results automatically.
+
+49. **Displayed amounts omit insignificant trailing zeros** (`5`, `15,5`) per product owner request. XLSX/CSV exports keep two decimals (`5.00`) for spreadsheet consistency.

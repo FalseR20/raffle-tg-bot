@@ -65,9 +65,15 @@ def parse_amount(raw: str, *, min_amount: Decimal, max_amount: Decimal) -> Decim
 
 
 def format_money(amount: Decimal | int | str) -> str:
-    """Format money for Russian UI: ``15,00``."""
+    """Format money for Russian UI, trimming insignificant trailing zeros.
+
+    ``15.00`` -> ``15``, ``15.50`` -> ``15,5``, ``15.05`` -> ``15,05``.
+    """
     value = Decimal(amount).quantize(Decimal("0.01"))
-    return f"{value:.2f}".replace(".", ",")
+    text = f"{value:.2f}".replace(".", ",")
+    if "," in text:
+        text = text.rstrip("0").rstrip(",")
+    return text
 
 
 def format_money_byn(amount: Decimal | int | str) -> str:

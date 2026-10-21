@@ -51,7 +51,7 @@ def test_invalid_setting_values(key, raw):
 
 def test_describe_setting():
     assert describe_setting("confirm_two_step", True) == "да"
-    assert describe_setting("max_donation", Decimal("5.00")) == "5.00"
+    assert describe_setting("max_donation", Decimal("5.00")) == "5"
     assert describe_setting("support_contact", None) == "—"
 
 

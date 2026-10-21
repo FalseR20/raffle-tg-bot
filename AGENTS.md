@@ -124,7 +124,7 @@ deliveries.
 - Escape reserved characters in dynamic values and in static templates. The validator in
   `bot/texts/markdown.py` is conservative; if Telegram rejects markup at runtime,
   `bot/services/notifications.py` retries as plain text.
-- Amounts display with a comma (`15,00 BYN`); exports use a dot.
+- Amounts display with a comma and without insignificant trailing zeros (`15 BYN`, `15,5 BYN`); exports use a dot with two decimals.
 - Dates display in the configured timezone (default Europe/Minsk); the database stores UTC.
 - Russian pluralization helpers are in `ru.py`; use them instead of hand-written forms.
 

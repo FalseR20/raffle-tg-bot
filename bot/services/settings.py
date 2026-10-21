@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.config import Settings
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import settings as settings_repo
+from bot.domain.money import format_money
 from bot.services.errors import ValidationError
 
 SETTING_KEYS = (
@@ -218,4 +219,6 @@ def describe_setting(key: str, value: Any) -> str:
         return "—"
     if isinstance(value, bool):
         return "да" if value else "нет"
+    if key == "max_donation":
+        return format_money(value)
     return str(value)

@@ -53,7 +53,8 @@ def test_minimum_is_inclusive():
 
 
 def test_money_formatting():
-    assert format_money(Decimal("15.00")) == "15,00"
-    assert format_money("9.9") == "9,90"
-    assert format_money_byn(Decimal("5")) == "5,00 BYN"
+    assert format_money(Decimal("15.00")) == "15"
+    assert format_money("9.9") == "9,9"
+    assert format_money("9.05") == "9,05"
+    assert format_money_byn(Decimal("5")) == "5 BYN"
     assert format_money_export(Decimal("15.5")) == "15.50"
