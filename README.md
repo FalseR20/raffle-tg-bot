@@ -158,8 +158,9 @@ volumes. There is no permanent local receipt directory: receipts are uploaded to
 RustFS bucket, and PostgreSQL stores metadata plus `receipt_object_key` only.
 
 Health endpoints: `docker compose ps` shows container healthchecks for PostgreSQL and RustFS.
-The bot container waits for both and then applies migrations. The bot exposes a lightweight HTTP
-health endpoint on `HEALTH_PORT` (default `8081`).
+The bot container waits for both and then applies migrations. The bot exposes a readiness
+endpoint on `HEALTH_PORT` (default `8081`); it returns `200` when PostgreSQL and RustFS are
+reachable and `503` otherwise.
 
 ## Backups
 

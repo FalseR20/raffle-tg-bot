@@ -121,20 +121,23 @@ the same handler/middleware path with a fake Telegram transport.
 41. **Draft replacement.** A user has at most one draft per raffle. Starting a new donation
     offers Continue / Start over / Cancel. Cancellation is atomic and fails if a reviewer has
     already confirmed. A partial unique index on `(raffle_id, user_id)` for `draft` and
-    `awaiting_receipt` makes this race-safe.
+    `awaiting_receipt` makes this race-safe; an integrity violation is returned as a friendly
+    "draft already exists" error.
 42. **Rate limiting** uses in-process memory (single instance). Limits reset on restart; database
     constraints still enforce the 20-applications-per-raffle limit.
 43. **Webhook mode** is optional. When `WEBHOOK_URL` is set, the bot serves the webhook on
     `WEBHOOK_PORT` (default 8443) at `WEBHOOK_PATH`; otherwise it uses long polling.
-44. **Health endpoint** is a minimal HTTP server on `HEALTH_PORT` (default 8081). It is not a
-    readiness probe for RustFS after startup.
+44. **Health endpoint** is a minimal HTTP server on `HEALTH_PORT` (default 8081). It returns
+    `200` only when PostgreSQL answers `SELECT 1` and RustFS responds to a bucket head request;
+    otherwise it returns `503`.
 45. **Testing database** is separate (`raffle_test`) and recreated at pytest session start via
     Alembic. There is no SQLite fallback.
 46. **No audit-log UI filters in MVP.** The panel shows the latest 20 entries and exports the
     full log as CSV. Filtering is possible in the CSV.
 47. **Receipt ZIP archive** from the spec's phase 2 is not implemented.
-48. **Blocking users.** `users.is_blocked` prevents new drafts. There is no admin UI toggle in
-    MVP; support can set it directly with a reviewed migration/script.
+48. **Blocking users.** `users.is_blocked` prevents new drafts and blocks existing
+    draft/receipt/amount flows. There is no admin UI toggle in MVP; support can set it directly
+    with a reviewed migration/script.
 
 ## Open questions for the product owner
 

@@ -23,6 +23,7 @@ from bot.services.errors import (
 )
 from bot.services.permissions import Permissions
 from bot.utils.slug import slugify, unique_slug
+from bot.utils.url import normalize_optional_http_url
 
 OPEN_REVIEW_STATUSES = (ApplicationStatus.PENDING_REVIEW, ApplicationStatus.REVISION_REQUESTED)
 UNFINISHED_STATUSES = (
@@ -76,6 +77,11 @@ def validate_input(data: RaffleInput) -> None:
         raise ValidationError("Количество призов должно быть не меньше одного.")
     if data.end_at <= data.start_at:
         raise ValidationError("Дата окончания должна быть позже даты начала.")
+    if data.channel_url:
+        try:
+            normalize_optional_http_url(data.channel_url)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
 
 async def _unique_raffle_slug(session: AsyncSession, title: str) -> str:
@@ -113,7 +119,7 @@ async def create_raffle(
         start_at=data.start_at,
         end_at=data.end_at,
         status=RaffleStatus.DRAFT,
-        channel_url=data.channel_url,
+        channel_url=normalize_optional_http_url(data.channel_url) or "",
         channel_title=data.channel_title,
         last_ticket_number=0,
         created_by=actor.user_id,
@@ -165,7 +171,7 @@ async def update_raffle(
     raffle.prizes_count = data.prizes_count
     raffle.start_at = data.start_at
     raffle.end_at = data.end_at
-    raffle.channel_url = data.channel_url
+    raffle.channel_url = normalize_optional_http_url(data.channel_url) or ""
     raffle.channel_title = data.channel_title
     await session.flush()
     return raffle
