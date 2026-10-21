@@ -112,6 +112,27 @@ Unit tests never touch the network. Integration and concurrency tests use real P
 
 Never run a real production raffle against the test bot.
 
+## VS Code
+
+The repository includes `.vscode/launch.json`, `.vscode/tasks.json`, and recommended settings.
+
+1. Open the repository folder in VS Code.
+2. Install the recommended extensions (Python, Python Debugger, Ruff).
+3. Select `.venv/bin/python` as the interpreter if VS Code has not done so automatically.
+4. Press **F5** and choose **Bot: run**.
+
+The launch configuration loads `.env`, runs `uv sync`, starts PostgreSQL and RustFS with
+`docker compose up -d --wait`, applies Alembic migrations, and then starts `bot.main`.
+
+Other configurations:
+
+- **Bot: run (no debug)** — start without breakpoints.
+- **Tests: pytest** — run the full suite under the debugger.
+- **Tests: current file** — run the file open in the editor.
+- **Alembic: upgrade head** — apply migrations.
+
+The `quality: ruff + tests` task runs all quality gates.
+
 ## Quality gates
 
 ```bash

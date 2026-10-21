@@ -1,0 +1,46 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "setup: local dependencies",
+      "type": "shell",
+      "command": "uv sync --all-groups && docker compose up -d --wait postgres rustfs && uv run alembic upgrade head",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "setup: database only",
+      "type": "shell",
+      "command": "docker compose up -d --wait postgres rustfs",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "quality: ruff + tests",
+      "type": "shell",
+      "command": "uv run ruff check . && uv run ruff format --check . && uv run pytest -q",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}
