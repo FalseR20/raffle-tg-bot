@@ -11,8 +11,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
     Message,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +19,7 @@ from bot.db.enums import RaffleStatus
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import raffles as raffles_repo
 from bot.db.repositories import winners as winners_repo
-from bot.keyboards.admin import audit_actions, draw_menu, winners_menu
+from bot.keyboards.admin import audit_actions, winners_menu
 from bot.services import notifications
 from bot.services.draw import record_manual_winner, reset_winners, run_random_draw
 from bot.services.errors import ServiceError
@@ -277,44 +275,13 @@ async def on_audit_csv(
 # ----------------------------------- draw ------------------------------------
 
 
-@router.callback_query(F.data == "adm:draw")
-async def on_draw(
-    callback: CallbackQuery,
-    bot: Bot,
-    session: AsyncSession,
-    permissions: Permissions,
-    runtime_settings: RuntimeSettings,
-) -> None:
-    if callback.message is None:
-        return
-    if not permissions.can_manage_raffles:
-        await callback.answer("Нет доступа", show_alert=True)
-        return
-    raffles = [
-        raffle
-        for raffle in await raffles_repo.list_all(session, limit=50)
-        if raffle.status in {RaffleStatus.FINISHED, RaffleStatus.ARCHIVED}
-    ]
-    await callback.answer()
-    await notifications.send_text(
-        bot,
-        callback.message.chat.id,
-        "🎲 *Розыгрыш победителей*\n\n"
-        "Запись победителей доступна после завершения розыгрыша\\. "
-        "Бумажный розыгрыш остаётся официальным; бот лишь фиксирует результаты\\.",
-        reply_markup=draw_menu(
-            [(raffle.id, raffle.title) for raffle in raffles],
-            random_enabled=runtime_settings.enable_random_draw,
-        ),
-    )
-
-
 @router.callback_query(F.data.regexp(r"^adm:winners:\d+$"))
 async def on_winners(
     callback: CallbackQuery,
     bot: Bot,
     session: AsyncSession,
     permissions: Permissions,
+    runtime_settings: RuntimeSettings,
 ) -> None:
     if callback.message is None or callback.data is None:
         return
@@ -325,10 +292,23 @@ async def on_winners(
     if raffle is None:
         await callback.answer("Розыгрыш не найден", show_alert=True)
         return
-    await _send_winners(bot, callback.message.chat.id, session, raffle)
+    await _send_winners(
+        bot,
+        callback.message.chat.id,
+        session,
+        raffle,
+        random_enabled=runtime_settings.enable_random_draw,
+    )
 
 
-async def _send_winners(bot: Bot, chat_id: int, session: AsyncSession, raffle) -> None:
+async def _send_winners(
+    bot: Bot,
+    chat_id: int,
+    session: AsyncSession,
+    raffle,
+    *,
+    random_enabled: bool = False,
+) -> None:
     winners = await winners_repo.list_for_raffle(session, raffle.id)
     lines = [f"🏆 *Победители: {escape_markdown_v2(raffle.title)}*", ""]
     if winners:
@@ -341,7 +321,14 @@ async def _send_winners(bot: Bot, chat_id: int, session: AsyncSession, raffle) -
     else:
         lines.append("Победители ещё не записаны\\.")
     await notifications.send_text(
-        bot, chat_id, "\n".join(lines), reply_markup=winners_menu(raffle.id)
+        bot,
+        chat_id,
+        "\n".join(lines),
+        reply_markup=winners_menu(
+            raffle.id,
+            random_enabled=random_enabled,
+            allow_random=raffle.status is RaffleStatus.FINISHED,
+        ),
     )
 
 
@@ -406,6 +393,7 @@ async def on_winner_ticket(
     bot: Bot,
     session: AsyncSession,
     permissions: Permissions,
+    runtime_settings: RuntimeSettings,
     state: FSMContext,
 ) -> None:
     try:
@@ -433,7 +421,13 @@ async def on_winner_ticket(
         return
     await state.clear()
     await notifications.send_text(bot, message.chat.id, "✅ Победитель записан\\.")
-    await _send_winners(bot, message.chat.id, session, raffle)
+    await _send_winners(
+        bot,
+        message.chat.id,
+        session,
+        raffle,
+        random_enabled=runtime_settings.enable_random_draw,
+    )
 
 
 @router.callback_query(F.data.regexp(r"^adm:winners_reset:\d+$"))
@@ -442,6 +436,7 @@ async def on_winners_reset(
     bot: Bot,
     session: AsyncSession,
     permissions: Permissions,
+    runtime_settings: RuntimeSettings,
 ) -> None:
     if callback.message is None or callback.data is None:
         return
@@ -456,41 +451,12 @@ async def on_winners_reset(
         await callback.answer(exc.user_message, show_alert=True)
         return
     await callback.answer("Победители сброшены")
-    await _send_winners(bot, callback.message.chat.id, session, raffle)
-
-
-@router.callback_query(F.data == "adm:draw_random")
-async def on_random_prompt(
-    callback: CallbackQuery,
-    bot: Bot,
-    session: AsyncSession,
-    permissions: Permissions,
-    runtime_settings: RuntimeSettings,
-) -> None:
-    if callback.message is None:
-        return
-    if not permissions.can_manage_raffles:
-        await callback.answer("Нет доступа", show_alert=True)
-        return
-    if not runtime_settings.enable_random_draw:
-        await callback.answer("Случайный розыгрыш выключен в настройках", show_alert=True)
-        return
-    raffles = [
-        raffle
-        for raffle in await raffles_repo.list_all(session, limit=50)
-        if raffle.status is RaffleStatus.FINISHED
-    ]
-    rows = [
-        [InlineKeyboardButton(text=raf.title[:50], callback_data=f"adm:draw_random_do:{raf.id}")]
-        for raf in raffles
-    ]
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="adm:draw")])
-    await callback.answer()
-    await notifications.send_text(
+    await _send_winners(
         bot,
         callback.message.chat.id,
-        "Выберите завершённый розыгрыш:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        session,
+        raffle,
+        random_enabled=runtime_settings.enable_random_draw,
     )
 
 
@@ -518,4 +484,10 @@ async def on_random_draw(
         await callback.answer(exc.user_message, show_alert=True)
         return
     await callback.answer("Розыгрыш проведён")
-    await _send_winners(bot, callback.message.chat.id, session, raffle)
+    await _send_winners(
+        bot,
+        callback.message.chat.id,
+        session,
+        raffle,
+        random_enabled=runtime_settings.enable_random_draw,
+    )

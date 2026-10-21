@@ -333,6 +333,5 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
         (53, "adm:setting:support_contact"),
         (54, "adm:setting_clear:support_contact"),
         (55, f"adm:export_raffle:{raffle.id}"),
-        (56, "adm:draw"),
     ):
         await dp.feed_update(bot, _callback(100, callback_data, update_id))

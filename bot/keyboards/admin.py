@@ -38,16 +38,13 @@ def main_menu(permissions: Permissions) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="📊 Статистика", callback_data="adm:stats"),
-                InlineKeyboardButton(text="🎲 Розыгрыш", callback_data="adm:draw"),
+                InlineKeyboardButton(text="🧾 Аудит", callback_data="adm:audit"),
             ],
             [
                 InlineKeyboardButton(text="👤 Роли", callback_data="adm:roles"),
                 InlineKeyboardButton(text="⚙️ Настройки", callback_data="adm:settings"),
             ],
-            [
-                InlineKeyboardButton(text="🧾 Аудит", callback_data="adm:audit"),
-                InlineKeyboardButton(text="🛡 Целостность", callback_data="adm:integrity"),
-            ],
+            [InlineKeyboardButton(text="🛡 Целостность", callback_data="adm:integrity")],
         ]
     else:
         org_id = next(iter(permissions.org_rep_ids)) if permissions.org_rep_ids else 0
@@ -546,35 +543,39 @@ def settings_menu(values: list[tuple[str, str, str]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def draw_menu(raffles: list[tuple[int, str]], *, random_enabled: bool) -> InlineKeyboardMarkup:
+def winners_menu(
+    raffle_id: int,
+    *,
+    random_enabled: bool = False,
+    allow_random: bool = False,
+) -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton(text=f"🏆 {title[:40]}", callback_data=f"adm:winners:{raffle_id}")]
-        for raffle_id, title in raffles
+        [
+            InlineKeyboardButton(
+                text="🏅 Записать победителя", callback_data=f"adm:winner_add:{raffle_id}"
+            )
+        ]
     ]
-    if random_enabled:
+    if random_enabled and allow_random:
         rows.append(
-            [InlineKeyboardButton(text="🎲 Случайный розыгрыш", callback_data="adm:draw_random")]
+            [
+                InlineKeyboardButton(
+                    text="🎲 Случайный розыгрыш",
+                    callback_data=f"adm:draw_random_do:{raffle_id}",
+                )
+            ]
         )
-    rows.append([InlineKeyboardButton(text="⬅️ В меню", callback_data="adm:menu")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-def winners_menu(raffle_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🏅 Записать победителя", callback_data=f"adm:winner_add:{raffle_id}"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="♻️ Сбросить победителей", callback_data=f"adm:winners_reset:{raffle_id}"
-                )
-            ],
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data="adm:draw")],
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="♻️ Сбросить победителей", callback_data=f"adm:winners_reset:{raffle_id}"
+            )
         ]
     )
+    rows.append(
+        [InlineKeyboardButton(text="⬅️ К розыгрышу", callback_data=f"adm:raffle:{raffle_id}")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def wizard_cancel(callback: str = "rw:cancel") -> InlineKeyboardMarkup:
