@@ -281,7 +281,10 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
     assert any("название канала" in text for _, text, _ in bot.messages)
     await dp.feed_update(bot, _callback(100, "rw:default:channel_title", 26))
     assert any("Выберите организации" in text for _, text, _ in bot.messages)
-    await dp.feed_update(bot, _callback(100, "rw:cancel", 27))
+    bot.messages.clear()
+    await dp.feed_update(bot, _callback(100, "rw:org_done", 27))
+    assert any("Цена билета" in text for _, text, _ in bot.messages)
+    assert any("Черновик" not in text for _, text, _ in bot.messages)
 
     # Organization wizard: skip topic and contact with buttons.
     bot.messages.clear()

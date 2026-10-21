@@ -91,6 +91,11 @@ async def _raffle_card_text(session: AsyncSession, raffle: Raffle, settings) -> 
 async def _show_raffle(
     bot: Bot, chat_id: int, session: AsyncSession, raffle: Raffle, settings
 ) -> None:
+    # Re-load after commit so relationships such as organizations are populated
+    # inside the async session, never through an implicit lazy load.
+    refreshed = await raffles_repo.get(session, raffle.id)
+    if refreshed is not None:
+        raffle = refreshed
     text = await _raffle_card_text(session, raffle, settings)
     applications_count = await raffles_repo.count_applications(session, raffle.id)
     await notifications.send_text(
