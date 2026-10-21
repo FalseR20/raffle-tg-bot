@@ -279,3 +279,9 @@ async def test_dispatch_smoke(session_factory, env_settings):
     assert any("контактную ссылку" in text for _, text, _ in bot.messages)
     await dp.feed_update(bot, _callback(100, "orgwiz:default:contact", 33))
     assert any("Организация создана" in text for _, text, _ in bot.messages)
+
+    bot.messages.clear()
+    await dp.feed_update(bot, _callback(100, "adm:methods", 34))
+    assert any("Организации" in text for _, text, _ in bot.messages)
+    await dp.feed_update(bot, _callback(100, f"adm:methods:{org.id}", 35))
+    assert any("Способы оплаты" in text for _, text, _ in bot.messages)

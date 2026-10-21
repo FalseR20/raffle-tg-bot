@@ -53,7 +53,7 @@ async def on_methods(
     if not _guard(permissions):
         await callback.answer("Нет доступа", show_alert=True)
         return
-    if callback.data and ":" in callback.data:
+    if callback.data and callback.data.startswith("adm:methods:"):
         organization = await orgs_repo.get(session, int(callback.data.rsplit(":", 1)[1]))
     else:
         await callback.answer()
