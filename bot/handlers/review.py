@@ -294,7 +294,9 @@ async def on_reject_reason(
         return
     if code == "other":
         await state.set_state(ReviewFlow.reject_reason)
-        await state.update_data(application_id=application_id)
+        await state.update_data(
+            application_id=application_id, card_chat_id=application.card_chat_id
+        )
         await callback.answer()
         await callback.message.answer("Напишите причину отклонения одним сообщением:")
         return
@@ -325,6 +327,18 @@ async def on_reject_reason_text(
 ) -> None:
     data = await state.get_data()
     application_id = int(data.get("application_id", 0))
+    card_chat_id = data.get("card_chat_id")
+    if (
+        card_chat_id is not None
+        and message.chat.id != card_chat_id
+        and message.chat.type != "private"
+    ):
+        await notifications.send_text(
+            bot,
+            message.chat.id,
+            "Причину можно указать только в чате проверки или в личном чате\\.",
+        )
+        return
     reason = (message.text or "").strip()
     if not reason:
         await notifications.send_text(bot, message.chat.id, "Причина не может быть пустой\\.")

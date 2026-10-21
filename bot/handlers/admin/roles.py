@@ -11,6 +11,7 @@ from bot.db.enums import InviteRole, RoleName
 from bot.db.repositories import invites as invites_repo
 from bot.db.repositories import organizations as orgs_repo
 from bot.db.repositories import roles as roles_repo
+from bot.db.repositories import users as users_repo
 from bot.keyboards.admin import (
     invites_list,
     role_organization_choice,
@@ -168,7 +169,7 @@ async def on_add_role(
     await notifications.send_text(
         bot,
         callback.message.chat.id,
-        "Введите Telegram ID пользователя. Пользователь должен хотя бы раз открыть бота.",
+        "Введите Telegram ID пользователя или перешлите его сообщение.",
         reply_markup=wizard_cancel("adm:roles"),
     )
 
@@ -184,6 +185,55 @@ async def on_organizer_id(
     await state.clear()
     await _assign_by_id(
         message, bot, session, permissions, role=RoleName.ORGANIZER, organization_id=None
+    )
+
+
+@router.message(RoleWizard.organizer_id, F.forward_from)
+async def on_organizer_forward(
+    message: Message,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    state: FSMContext,
+) -> None:
+    forwarded = message.forward_from
+    if forwarded is None or forwarded.is_bot:
+        await notifications.send_text(bot, message.chat.id, "Перешлите сообщение пользователя\\.")
+        return
+    await state.clear()
+    await _assign_by_id(
+        message,
+        bot,
+        session,
+        permissions,
+        role=RoleName.ORGANIZER,
+        organization_id=None,
+        target_id=forwarded.id,
+    )
+
+
+@router.message(RoleWizard.org_rep_id, F.forward_from)
+async def on_org_rep_forward(
+    message: Message,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    state: FSMContext,
+) -> None:
+    forwarded = message.forward_from
+    if forwarded is None or forwarded.is_bot:
+        await notifications.send_text(bot, message.chat.id, "Перешлите сообщение пользователя\\.")
+        return
+    await state.update_data(target_id=forwarded.id)
+    organizations = await orgs_repo.list_all(session, only_active=True)
+    await notifications.send_text(
+        bot,
+        message.chat.id,
+        "Выберите организацию для представителя:",
+        reply_markup=role_organization_choice(
+            [(organization.id, organization.name) for organization in organizations],
+            "org_rep",
+        ),
     )
 
 
@@ -229,6 +279,16 @@ async def _assign_by_id(
         except ValueError:
             await notifications.send_text(bot, message.chat.id, "Telegram ID должен быть числом\\.")
             return
+    if await users_repo.get(session, target_id) is None:
+        await users_repo.upsert(
+            session,
+            user_id=target_id,
+            username=None,
+            first_name="",
+            last_name=None,
+            language_code=None,
+            seen_at=utcnow(),
+        )
     try:
         await roles_service.assign_role(
             session,

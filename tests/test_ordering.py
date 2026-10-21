@@ -32,3 +32,11 @@ def test_organization_order_is_stable_per_user_and_differs_between_users():
 def test_single_organization_is_not_randomized():
     orgs = _orgs(1)
     assert randomized_organizations(orgs, user_id=1, raffle_id=2) == orgs
+
+
+def test_apps_callback_parsing():
+    from bot.handlers.admin.applications import parse_apps_filter
+
+    assert parse_apps_filter("adm:apps_pending") == ("pending", 0)
+    assert parse_apps_filter("adm:apps_all:42") == ("all", 42)
+    assert parse_apps_filter("adm:apps_confirmed:7") == ("confirmed", 7)

@@ -11,6 +11,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bot.config import Settings
+from bot.db.repositories import raffles as raffles_repo
 from bot.db.session import session_scope
 from bot.services.cards import resend_missing_cards
 from bot.services.lifecycle import (
@@ -40,6 +41,7 @@ class BotScheduler:
         self.env = env
         self.storage = storage
         self.scheduler = AsyncIOScheduler(timezone=env.timezone)
+        self._chat_health: dict[int, bool] = {}
 
     async def tick(self) -> None:
         report = None
@@ -71,6 +73,41 @@ class BotScheduler:
         except Exception:
             logger.exception("Notification retry failed")
 
+    async def check_chat_health(self) -> None:
+        try:
+            async with session_scope(self.session_factory) as session:
+                raffle = await raffles_repo.get_current(session)
+                organizations = (
+                    await raffles_repo.enabled_organizations(session, raffle.id)
+                    if raffle is not None
+                    else []
+                )
+        except Exception:
+            logger.exception("Chat health query failed")
+            return
+
+        failures = []
+        states: dict[int, bool] = {}
+        for organization in organizations:
+            try:
+                await self.bot.get_chat(organization.review_chat_id)
+                states[organization.id] = True
+            except Exception as exc:
+                states[organization.id] = False
+                if self._chat_health.get(organization.id) is not False:
+                    failures.append((organization, exc))
+        if failures:
+            lines = [
+                "⚠️ Бот не может писать в чат проверки:",
+                *[f"• {organization.name}: {str(exc)[:120]}" for organization, exc in failures],
+            ]
+            for admin_id in self.env.admin_id_set:
+                try:
+                    await self.bot.send_message(admin_id, "\n".join(lines))
+                except Exception:
+                    logger.warning("Could not alert admin %s about chat health", admin_id)
+        self._chat_health = states
+
     async def cleanup(self) -> None:
         try:
             async with session_scope(self.session_factory) as session:
@@ -91,6 +128,13 @@ class BotScheduler:
             self.tick,
             IntervalTrigger(seconds=60),
             id="lifecycle",
+            max_instances=1,
+            coalesce=True,
+        )
+        self.scheduler.add_job(
+            self.check_chat_health,
+            IntervalTrigger(minutes=15),
+            id="chat-health",
             max_instances=1,
             coalesce=True,
         )

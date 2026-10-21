@@ -221,3 +221,6 @@ __marimo__/
 
 # Graphify generated knowledge graph
 graphify-out/
+
+# Local backups (contain personal data)
+backups/

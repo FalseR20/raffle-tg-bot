@@ -91,7 +91,8 @@ async def _send_stats(
     lines = [
         f"📊 *Статистика: {escape_markdown_v2(raffle.title)}*",
         f"Всего заявок: {stats.total_applications}",
-        f"На проверке: {counts.get('pending_review', 0) + counts.get('revision_requested', 0)}",
+        f"На проверке: {counts.get('pending_review', 0) + counts.get('revision_requested', 0)} "
+        f"(самая старая: {stats.oldest_pending_days} дн\\.)",
         f"Подтверждено: {counts.get('confirmed', 0)}",
         f"Отклонено: {counts.get('rejected', 0)}",
         f"Отменено: {counts.get('cancelled', 0)}",

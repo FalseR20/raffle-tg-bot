@@ -21,6 +21,7 @@ from bot.middlewares.auth import AuthMiddleware
 from bot.middlewares.db import DbSessionMiddleware
 from bot.middlewares.throttle import ThrottleMiddleware
 from bot.scheduler import BotScheduler
+from bot.services import notifications
 from bot.services.ratelimit import RateLimiter
 from bot.services.roles import sync_admin_roles
 from bot.services.storage import ReceiptStorage
@@ -29,7 +30,15 @@ from bot.utils.time import utcnow
 logger = logging.getLogger(__name__)
 
 
-async def _startup_checks(env: Settings, storage: ReceiptStorage) -> None:
+async def _startup_checks(env: Settings, storage: ReceiptStorage, engine) -> None:
+    from sqlalchemy import text
+
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+    except Exception as exc:
+        logger.error("PostgreSQL is not available: %s", exc)
+        raise
     try:
         await storage.ensure_bucket()
     except Exception as exc:
@@ -66,8 +75,8 @@ async def run() -> None:
         use_ssl=env.rustfs_use_ssl,
         force_path_style=env.rustfs_force_path_style,
     )
-    await _startup_checks(env, storage)
-    await _sync_admins(session_factory, env)
+    await _startup_checks(env, storage, engine)
+    admin_granted, admin_revoked = await _sync_admins(session_factory, env)
 
     bot = Bot(
         token=env.bot_token,
@@ -92,6 +101,10 @@ async def run() -> None:
     dispatcher.include_router(participant.router)
     dispatcher.include_router(receipts.router)
 
+    for user_id in admin_granted:
+        await notifications.send_text(bot, user_id, "Вам выдана роль администратора в боте\\.")
+    for user_id in admin_revoked:
+        await notifications.send_text(bot, user_id, "Роль администратора в боте отозвана\\.")
     try:
         await bot.set_my_commands(
             [

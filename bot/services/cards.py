@@ -24,7 +24,7 @@ from bot.services.errors import NoReviewerAvailableError, ServiceError
 from bot.services.settings import RuntimeSettings
 from bot.services.storage import ReceiptStorage
 from bot.services.users import mention
-from bot.texts.markdown import CAPTION_LIMIT, escape_markdown_v2
+from bot.texts.markdown import CAPTION_LIMIT, escape_markdown_v2, to_plain_text
 from bot.texts.ru import admin_card_text
 
 logger = get_logger(__name__)
@@ -241,6 +241,13 @@ async def _send_receipt(
     try:
         return await _send_by_file_id(bot, chat.chat_id, application, **kwargs)
     except TelegramBadRequest as exc:
+        if "parse" in str(exc).lower() and caption:
+            logger.warning(
+                "Caption markup rejected for %s; using plain text", application.public_id
+            )
+            kwargs["caption"] = to_plain_text(caption)
+            kwargs["parse_mode"] = None
+            return await _send_by_file_id(bot, chat.chat_id, application, **kwargs)
         logger.warning("file_id delivery failed for %s: %s", application.public_id, exc)
 
     if not application.receipt_object_key:
@@ -291,6 +298,23 @@ async def edit_review_card(
             )
     except TelegramBadRequest as exc:
         logger.warning("Could not edit review card %s: %s", application.public_id, exc)
+        try:
+            if is_caption:
+                await bot.edit_message_caption(
+                    chat_id=application.card_chat_id,
+                    message_id=application.card_message_id,
+                    caption=to_plain_text(truncated),
+                    reply_markup=None,
+                )
+            else:
+                await bot.edit_message_text(
+                    chat_id=application.card_chat_id,
+                    message_id=application.card_message_id,
+                    text=to_plain_text(truncated),
+                    reply_markup=None,
+                )
+        except TelegramBadRequest:
+            logger.warning("Plain-text card edit failed for %s", application.public_id)
 
 
 async def send_receipt_to_chat(

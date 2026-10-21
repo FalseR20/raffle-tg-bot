@@ -121,7 +121,20 @@ volumes. There is no permanent local receipt directory: receipts are uploaded to
 RustFS bucket, and PostgreSQL stores metadata plus `receipt_object_key` only.
 
 Health endpoints: `docker compose ps` shows container healthchecks for PostgreSQL and RustFS.
-The bot container waits for both and then applies migrations.
+The bot container waits for both and then applies migrations. The bot exposes a lightweight HTTP
+health endpoint on `HEALTH_PORT` (default `8081`).
+
+## Backups
+
+`scripts/backup.sh` creates a compressed PostgreSQL dump and a RustFS data archive in
+`BACKUP_DIR` (default `./backups`), keeping 14 days by default. `scripts/restore.sh` is
+destructive and requires `CONFIRM=yes`. Schedule backups with cron or a systemd timer, copy them
+off-host, encrypt them (they contain personal data) and test restores regularly.
+
+```bash
+BACKUP_DIR=/srv/backups ./scripts/backup.sh
+CONFIRM=yes ./scripts/restore.sh backups/postgres_*.dump.gz backups/rustfs_*.tar.gz
+```
 
 ## Deployment notes
 

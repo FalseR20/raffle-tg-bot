@@ -57,6 +57,16 @@ def _money(value) -> str:
     return escape_markdown_v2(ru.format_money(value)) if value is not None else "—"
 
 
+def parse_apps_filter(data: str) -> tuple[str, int]:
+    """Parse ``adm:apps_<filter>[:<raffle_id>]`` into filter and raffle id."""
+    parts = data.split(":")
+    if len(parts) < 2 or not parts[1].startswith("apps_"):
+        raise ValueError("not an applications filter callback")
+    filter_key = parts[1].split("_", 1)[1]
+    raffle_id = int(parts[2]) if len(parts) > 2 else 0
+    return filter_key, raffle_id
+
+
 @router.callback_query(F.data == "adm:apps")
 async def on_apps_menu(callback: CallbackQuery, bot: Bot, permissions: Permissions) -> None:
     if callback.message is None:
@@ -80,9 +90,7 @@ async def on_apps_filter(
 ) -> None:
     if callback.message is None or callback.data is None:
         return
-    parts = callback.data.split(":")
-    filter_key = parts[1].split("_", 1)[1]
-    raffle_id = int(parts[2]) if len(parts) > 2 else 0
+    filter_key, raffle_id = parse_apps_filter(callback.data)
     await callback.answer()
     await _send_list(
         session,
@@ -252,6 +260,13 @@ async def _application_card_text(
         )
     if application.rejection_reason:
         lines.append(f"❌ Причина: {escape_markdown_v2(application.rejection_reason)}")
+    if (
+        application.status
+        in {ApplicationStatus.PENDING_REVIEW, ApplicationStatus.REVISION_REQUESTED}
+        and application.submitted_at is not None
+    ):
+        age_days = (utcnow() - application.submitted_at).days
+        lines.append(f"⏳ На проверке: {age_days} дн\\.")
     if application.receipt_object_key:
         lines.append(
             f"📎 Чек: {escape_markdown_v2(application.receipt_mime or '—')}, "

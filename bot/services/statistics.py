@@ -32,6 +32,7 @@ class RaffleStatistics:
     prizes_count: int = 1
     unique_participants: int = 0
     average_donation: Decimal = Decimal("0.00")
+    oldest_pending_days: int = 0
     start_to_receipt_percent: Decimal = Decimal("0.00")
     receipt_to_confirmation_percent: Decimal = Decimal("0.00")
     by_organization: list[BreakdownRow] = field(default_factory=list)
@@ -79,6 +80,16 @@ async def build_statistics(
         stats.start_to_receipt_percent = (
             Decimal(len(submitted)) * Decimal(100) / Decimal(len(applications))
         ).quantize(Decimal("0.1"))
+    pending_times = [
+        app.submitted_at
+        for app in applications
+        if app.status in {ApplicationStatus.PENDING_REVIEW, ApplicationStatus.REVISION_REQUESTED}
+        and app.submitted_at is not None
+    ]
+    if pending_times:
+        from bot.utils.time import utcnow
+
+        stats.oldest_pending_days = max(0, (utcnow() - min(pending_times)).days)
     if submitted:
         stats.receipt_to_confirmation_percent = (
             Decimal(len(confirmed)) * Decimal(100) / Decimal(len(submitted))

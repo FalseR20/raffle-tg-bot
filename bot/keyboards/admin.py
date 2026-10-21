@@ -96,7 +96,13 @@ def raffles_list(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def raffle_card(raffle_id: int, status: RaffleStatus, *, can_manage: bool) -> InlineKeyboardMarkup:
+def raffle_card(
+    raffle_id: int,
+    status: RaffleStatus,
+    *,
+    can_manage: bool,
+    applications_count: int = 0,
+) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
     if can_manage:
         if status in {RaffleStatus.DRAFT, RaffleStatus.SCHEDULED}:
@@ -138,6 +144,15 @@ def raffle_card(raffle_id: int, status: RaffleStatus, *, can_manage: bool) -> In
                     )
                 ]
             )
+            if applications_count == 0:
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text="↩️ В черновик",
+                            callback_data=f"adm:raffle_draft:{raffle_id}",
+                        )
+                    ]
+                )
         if status is RaffleStatus.FINISHED:
             rows.append(
                 [

@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.enums import ApplicationStatus
+from bot.db.enums import ApplicationStatus, RaffleStatus
 from bot.db.models import Raffle
 from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import participants as participants_repo
@@ -32,6 +32,7 @@ from bot.services.raffles import (
     extend_end_at,
     finish,
     resume,
+    return_to_draft,
     stop_acceptance,
 )
 from bot.states import RaffleWizard
@@ -91,11 +92,17 @@ async def _show_raffle(
     bot: Bot, chat_id: int, session: AsyncSession, raffle: Raffle, settings
 ) -> None:
     text = await _raffle_card_text(session, raffle, settings)
+    applications_count = await raffles_repo.count_applications(session, raffle.id)
     await notifications.send_text(
         bot,
         chat_id,
         text,
-        reply_markup=raffle_card(raffle.id, raffle.status, can_manage=True),
+        reply_markup=raffle_card(
+            raffle.id,
+            raffle.status,
+            can_manage=True,
+            applications_count=applications_count,
+        ),
     )
 
 
@@ -266,6 +273,19 @@ async def on_finish_request(
     raffle = await _get_raffle(session, callback)
     if raffle is None:
         return
+    if raffle.status is RaffleStatus.ACTIVE:
+        await callback.answer()
+        await notifications.send_text(
+            bot,
+            callback.message.chat.id,
+            "Сначала остановите приём заявок, затем завершите розыгрыш\\.",
+            reply_markup=confirm_action(
+                "⏹ Остановить приём",
+                f"adm:raffle_stop_yes:{raffle.id}",
+                f"adm:raffle:{raffle.id}",
+            ),
+        )
+        return
     pending = await apps_repo.pending_for_raffle(session, raffle.id)
     await callback.answer()
     await notifications.send_text(
@@ -427,6 +447,29 @@ async def on_delete(
         return
     await callback.answer("Удалено")
     await _send_raffles(bot, callback.message.chat.id, session, permissions)
+
+
+@router.callback_query(F.data.regexp(r"^adm:raffle_draft:\d+$"))
+async def on_return_to_draft(
+    callback: CallbackQuery,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    runtime_settings,
+) -> None:
+    if callback.message is None:
+        return
+    raffle = await _get_raffle(session, callback)
+    if raffle is None:
+        return
+    try:
+        await return_to_draft(session, actor=permissions, raffle=raffle, now=utcnow())
+        await session.commit()
+    except ServiceError as exc:
+        await callback.answer(exc.user_message, show_alert=True)
+        return
+    await callback.answer("Возвращено в черновик")
+    await _show_raffle(bot, callback.message.chat.id, session, raffle, runtime_settings)
 
 
 @router.callback_query(F.data.regexp(r"^adm:raffle_extend:\d+$"))
