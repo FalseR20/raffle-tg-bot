@@ -161,8 +161,17 @@ def raffle_card(
                     )
                 ]
             )
+        if status in {RaffleStatus.FINISHED, RaffleStatus.ARCHIVED}:
             rows.append(
                 [InlineKeyboardButton(text="🖨 PDF билетов", callback_data=f"adm:pdf:{raffle_id}")]
+            )
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text="🏆 Победители",
+                        callback_data=f"adm:winners:{raffle_id}",
+                    )
+                ]
             )
         if status is RaffleStatus.DRAFT:
             rows.append(
