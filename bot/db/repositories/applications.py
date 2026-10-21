@@ -24,6 +24,7 @@ OPEN_STATUSES = (
 class ApplicationFilters:
     raffle_id: int | None = None
     organization_id: int | None = None
+    organization_ids: frozenset[int] | None = None
     payment_method_id: int | None = None
     status: ApplicationStatus | None = None
     statuses: tuple[ApplicationStatus, ...] | None = None
@@ -36,6 +37,8 @@ def _apply_filters(stmt, filters: ApplicationFilters):
         stmt = stmt.where(Application.raffle_id == filters.raffle_id)
     if filters.organization_id is not None:
         stmt = stmt.where(Application.organization_id == filters.organization_id)
+    if filters.organization_ids is not None:
+        stmt = stmt.where(Application.organization_id.in_(filters.organization_ids))
     if filters.payment_method_id is not None:
         stmt = stmt.where(Application.payment_method_id == filters.payment_method_id)
     if filters.status is not None:

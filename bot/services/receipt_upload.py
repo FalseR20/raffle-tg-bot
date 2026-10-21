@@ -7,15 +7,22 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError as SAIntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.enums import ReceiptType
 from bot.db.models import Application
 from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import audit as audit_repo
+from bot.db.repositories import raffles as raffles_repo
 from bot.services import receipts as receipts_service
 from bot.services.applications import attach_receipt
-from bot.services.errors import InvalidStateError, ReceiptError, StorageError
+from bot.services.errors import (
+    InvalidStateError,
+    RaffleNotAcceptingError,
+    ReceiptError,
+    StorageError,
+)
 from bot.services.storage import ReceiptStorage
 
 DownloadFn = Callable[[str], Awaitable[bytes]]
@@ -59,6 +66,16 @@ async def accept_receipt(
         raise InvalidStateError("Заявка не найдена.")
     if current.status.value not in {"awaiting_receipt", "revision_requested"}:
         raise InvalidStateError("Сейчас нельзя прикрепить чек.")
+
+    raffle = await raffles_repo.get(session, current.raffle_id)
+    if raffle is None or raffle.status.value not in {"active", "closed"}:
+        raise RaffleNotAcceptingError()
+    if current.status.value == "awaiting_receipt" and (
+        raffle.status.value == "closed" or raffle.end_at <= now
+    ):
+        raise RaffleNotAcceptingError(
+            "Приём заявок завершён. Чек по незавершённому черновику больше не принимается."
+        )
 
     data = await _download(download, incoming.file_id)
     if len(data) > max_bytes:
@@ -115,9 +132,11 @@ async def accept_receipt(
             size=info.size,
             now=now,
         )
-    except Exception:
+    except Exception as exc:
         with contextlib.suppress(StorageError):
             await storage.delete(object_key)
+        if isinstance(exc, SAIntegrityError):
+            raise ReceiptError("Этот чек уже был загружен в другой заявке.") from exc
         raise
 
     await audit_repo.log(

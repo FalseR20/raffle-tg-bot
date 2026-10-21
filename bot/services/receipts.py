@@ -131,7 +131,8 @@ def _validate_pdf(data: bytes) -> None:
         reader = PdfReader(io.BytesIO(data))
         if reader.is_encrypted:
             raise ReceiptError("PDF защищён паролем. Сохраните файл без пароля и пришлите снова.")
-        _ = len(reader.pages)
+        if len(reader.pages) < 1:
+            raise ReceiptError("PDF-файл не содержит страниц.")
     except ReceiptError:
         raise
     except (PdfReadError, ValueError, OSError) as exc:

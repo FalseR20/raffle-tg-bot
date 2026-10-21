@@ -138,6 +138,21 @@ async def redeem_invite(
             granted_by=invite.created_by,
             at=now,
         )
+        await audit_repo.log(
+            session,
+            entity_type="role",
+            entity_id=f"{user_id}:{role.value}:{invite.organization_id or 0}",
+            actor_id=invite.created_by,
+            action="role_granted",
+            payload={
+                "user_id": user_id,
+                "role": role.value,
+                "organization_id": invite.organization_id,
+                "source": "invite",
+                "invite_id": invite.id,
+            },
+            at=now,
+        )
 
     invite.used_by = user_id
     invite.used_at = now

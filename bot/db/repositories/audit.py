@@ -61,3 +61,15 @@ async def list_entries(
         stmt = stmt.where(AuditLog.created_at >= since)
     stmt = stmt.limit(limit).offset(offset)
     return list((await session.execute(stmt)).scalars())
+
+
+async def for_application(
+    session: AsyncSession, application_id: int, *, limit: int = 20
+) -> list[AuditLog]:
+    stmt = (
+        select(AuditLog)
+        .where(AuditLog.application_id == application_id)
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    )
+    return list((await session.execute(stmt)).scalars())

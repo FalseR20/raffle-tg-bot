@@ -62,6 +62,9 @@ class Settings(BaseSettings):
 
     webhook_url: str | None = None
     webhook_secret: str | None = None
+    webhook_path: str = "/webhook"
+    webhook_port: int = 8443
+    health_port: int = 8081
     log_level: str = "INFO"
 
     @field_validator("admin_ids", mode="before")
