@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from bot.texts import ru
-from bot.texts.markdown import validate_markdown_v2
+from bot.texts.markdown import safe_markdown, validate_markdown_v2
 
 TZ = ZoneInfo("Europe/Minsk")
 HOSTILE = 'Org "A" [x](y). ! _*~`'
@@ -144,6 +144,30 @@ TEXTS = [
 @pytest.mark.parametrize("text", TEXTS)
 def test_all_templates_are_valid_markdown(text):
     validate_markdown_v2(text)
+
+
+def test_safe_markdown_escapes_legacy_invalid_instructions():
+    invalid = "Там сям (номер) 1234"
+    assert safe_markdown(invalid) == "Там сям \\(номер\\) 1234"
+    validate_markdown_v2(
+        ru.payment_instructions_text(
+            organization_name="Org",
+            payment_method_title="Карта",
+            payment_instructions=invalid,
+            payment_code="K7M2Q",
+            min_amount=Decimal("5"),
+            ticket_price=Decimal("5"),
+        )
+    )
+    valid = "Там сям по номеру `1234`"
+    assert safe_markdown(valid) == valid
+
+
+def test_all_admin_wizard_prompts_are_valid_markdown():
+    from bot.handlers.admin.raffle_wizard import _PROMPTS
+
+    for prompt in _PROMPTS.values():
+        validate_markdown_v2(prompt)
 
 
 def test_ranges_and_pluralization_in_texts():

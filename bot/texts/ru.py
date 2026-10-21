@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from bot.domain.money import format_money
 from bot.domain.tickets import compress_ranges
 from bot.texts.markdown import escape_markdown_v2 as esc
-from bot.texts.markdown import escape_url
+from bot.texts.markdown import escape_url, safe_markdown
 from bot.utils.time import format_datetime
 
 
@@ -129,7 +129,7 @@ def payment_instructions_text(
     return (
         f"🏢 *{esc(organization_name)}*\n"
         f"💳 *{esc(payment_method_title)}*\n\n"
-        f"{payment_instructions}\n\n"
+        f"{safe_markdown(payment_instructions)}\n\n"
         f"🔖 Код платежа: `{esc(payment_code)}`\n"
         "Если банк позволяет указать назначение платежа, добавьте этот код — "
         "организации будет проще найти ваш перевод\\.\n\n"

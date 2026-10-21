@@ -145,7 +145,7 @@ async def on_org_name(
     await notifications.send_text(
         bot,
         message.chat.id,
-        "Введите короткое описание организации (обычный текст):",
+        "Введите короткое описание организации \\(обычный текст\\):",
         reply_markup=wizard_cancel("adm:orgs"),
     )
 
@@ -161,7 +161,7 @@ async def on_org_description(
     await notifications.send_text(
         bot,
         message.chat.id,
-        "Введите ID чата проверки (например, -1001234567890). "
+        "Введите ID чата проверки \\(например, \\-1001234567890\\)\\. "
         "Команда /chatid покажет ID текущего чата\\.",
         reply_markup=wizard_cancel("adm:orgs"),
     )
@@ -381,7 +381,7 @@ async def on_org_set(
     await callback.answer()
     prompts = {
         "name": "Введите новое название:",
-        "slug": "Введите новый slug (латиница, цифры, дефис):",
+        "slug": "Введите новый slug \\(латиница, цифры, дефис\\):",
         "description": "Введите новое описание:",
         "chat": "Введите ID чата проверки:",
         "thread": "Введите ID темы или нажмите «Без темы»:",

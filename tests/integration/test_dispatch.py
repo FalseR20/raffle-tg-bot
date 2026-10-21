@@ -20,6 +20,7 @@ from bot.middlewares.auth import AuthMiddleware
 from bot.middlewares.db import DbSessionMiddleware
 from bot.middlewares.throttle import ThrottleMiddleware
 from bot.services.ratelimit import RateLimiter
+from bot.texts.markdown import validate_markdown_v2
 from tests.helpers import make_organization, make_raffle
 
 pytestmark = pytest.mark.integration
@@ -46,6 +47,8 @@ class FakeBot:
         return SimpleNamespace(message_id=1)
 
     async def send_message(self, chat_id, text, **kwargs):
+        if kwargs.get("parse_mode") == "MarkdownV2":
+            validate_markdown_v2(text)
         self.messages.append((chat_id, text, kwargs))
         return Message(
             message_id=len(self.messages),
@@ -61,9 +64,13 @@ class FakeBot:
         return SimpleNamespace(username=self.username)
 
     async def send_photo(self, *args, **kwargs):
+        if kwargs.get("parse_mode") == "MarkdownV2" and kwargs.get("caption"):
+            validate_markdown_v2(kwargs["caption"])
         return SimpleNamespace(message_id=1)
 
     async def send_document(self, *args, **kwargs):
+        if kwargs.get("parse_mode") == "MarkdownV2" and kwargs.get("caption"):
+            validate_markdown_v2(kwargs["caption"])
         return SimpleNamespace(message_id=1)
 
     async def get_chat(self, chat_id):
@@ -156,7 +163,17 @@ def build_dispatcher(session_factory, env: Settings):
     return dp
 
 
-async def test_dispatch_smoke(session_factory, env_settings):
+async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
+    from bot.services import notifications
+
+    original_send_text = notifications.send_text
+
+    async def strict_send_text(bot, chat_id, text, **kwargs):
+        validate_markdown_v2(text)
+        return await original_send_text(bot, chat_id, text, **kwargs)
+
+    monkeypatch.setattr(notifications, "send_text", strict_send_text)
+
     bot = FakeBot()
     dp = build_dispatcher(session_factory, env_settings)
 
@@ -166,7 +183,7 @@ async def test_dispatch_smoke(session_factory, env_settings):
 
     async with session_factory() as session:
         org = await make_organization(session)
-        await make_raffle(session, organizations=[org])
+        raffle = await make_raffle(session, organizations=[org])
         await session.commit()
 
     bot.messages.clear()
@@ -285,3 +302,34 @@ async def test_dispatch_smoke(session_factory, env_settings):
     assert any("Организации" in text for _, text, _ in bot.messages)
     await dp.feed_update(bot, _callback(100, f"adm:methods:{org.id}", 35))
     assert any("Способы оплаты" in text for _, text, _ in bot.messages)
+
+    bot.messages.clear()
+    await dp.feed_update(bot, _callback(100, f"adm:method_new:{org.id}", 36))
+    assert any("название способа" in text for _, text, _ in bot.messages)
+    await dp.feed_update(bot, _message(100, "Карта BYN", 37))
+    assert any("инструкцию" in text for _, text, _ in bot.messages)
+    await dp.feed_update(bot, _message(100, "Карта: `1234`", 38))
+    assert any("Способ оплаты создан" in text for _, text, _ in bot.messages)
+
+    # Exercise read-only admin screens; strict_send_text rejects invalid markup.
+    for update_id, callback_data in (
+        (39, f"adm:app:{application_id}"),
+        (40, "adm:stats"),
+        (41, "adm:participants"),
+        (42, "adm:audit"),
+        (43, "adm:integrity"),
+        (44, "adm:settings"),
+        (45, "adm:exports"),
+        (46, "adm:role_add_id:org_rep"),
+        (47, "adm:roles"),
+        (48, "adm:roles_reps"),
+        (49, "adm:invites"),
+        (50, f"adm:org:{org.id}"),
+        (51, "adm:method:1"),
+        (52, "adm:markup_help"),
+        (53, "adm:setting:support_contact"),
+        (54, "adm:setting_clear:support_contact"),
+        (55, f"adm:export_raffle:{raffle.id}"),
+        (56, "adm:draw"),
+    ):
+        await dp.feed_update(bot, _callback(100, callback_data, update_id))

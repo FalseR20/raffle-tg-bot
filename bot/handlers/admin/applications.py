@@ -35,7 +35,7 @@ from bot.services.storage import ReceiptStorage
 from bot.services.users import display_name, mention
 from bot.states import ApplicationSearch, ParticipantSearch
 from bot.texts import ru
-from bot.texts.markdown import escape_markdown_v2
+from bot.texts.markdown import escape_markdown_v2, safe_markdown
 from bot.utils.time import format_datetime, utcnow
 
 router = Router(name="admin_applications")
@@ -201,7 +201,7 @@ async def _send_list(
             f"{escape_markdown_v2(format_datetime(application.created_at, settings.timezone))}"
         )
     text = (
-        f"📥 Заявки ({total})\\."
+        f"📥 Заявки \\({total}\\)\\."
         + (" Поиск: " + escape_markdown_v2(query_text) if query_text else "")
         + "\n\n"
         + "\n\n".join(lines)
@@ -281,13 +281,13 @@ async def _application_card_text(
     ]
     if application.status is ApplicationStatus.CONFIRMED:
         lines.append(
-            f"🎫 Выдано: +{application.tickets_awarded} "
-            f"(всего {application.tickets_total_after}) · "
+            f"🎫 Выдано: \\+{application.tickets_awarded} "
+            f"\\(всего {application.tickets_total_after}\\) · "
             f"{application.first_ticket_number}–{application.last_ticket_number}"
         )
         lines.append(
             f"✅ Проверил: {application.reviewed_by} · "
-            f"{format_datetime(application.reviewed_at, settings.timezone)}"
+            f"{escape_markdown_v2(format_datetime(application.reviewed_at, settings.timezone))}"
         )
     if application.status is ApplicationStatus.VOIDED:
         lines.append(
@@ -311,7 +311,8 @@ async def _application_card_text(
         lines.append(f"🗄 Ключ: `{escape_markdown_v2(application.receipt_object_key)}`")
     if application.payment_instructions_snapshot:
         lines.append(
-            "\n💳 *Инструкция на момент заявки:*\n" + application.payment_instructions_snapshot
+            "\n💳 *Инструкция на момент заявки:*\n"
+            + safe_markdown(application.payment_instructions_snapshot)
         )
     history = await audit_repo.for_application(session, application.id, limit=6)
     if history:

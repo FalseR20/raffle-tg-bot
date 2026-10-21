@@ -15,7 +15,12 @@ from aiogram.exceptions import (
 from aiogram.types import Message
 
 from bot.logging import get_logger
-from bot.texts.markdown import MESSAGE_LIMIT, to_plain_text, truncate
+from bot.texts.markdown import (
+    MESSAGE_LIMIT,
+    is_valid_markdown_v2,
+    to_plain_text,
+    truncate,
+)
 
 logger = get_logger(__name__)
 
@@ -48,6 +53,16 @@ async def send_text(
         kwargs["reply_markup"] = reply_markup
     if message_thread_id is not None:
         kwargs["message_thread_id"] = message_thread_id
+
+    if not is_valid_markdown_v2(text):
+        logger.debug("MarkdownV2 validation failed; sending plain text")
+        plain = truncate(to_plain_text(text), MESSAGE_LIMIT)
+        try:
+            message = await _send_with_retry(bot, chat_id, plain, parse_mode=None, **kwargs)
+            return DeliveryResult(message=message, used_plain_text=True)
+        except Exception as exc:
+            return DeliveryResult(message=None, used_plain_text=True, error=str(exc))
+
     try:
         message = await _send_with_retry(
             bot,

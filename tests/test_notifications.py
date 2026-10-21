@@ -38,3 +38,13 @@ async def test_successful_markdown_is_not_retried():
     assert result.ok
     assert not result.used_plain_text
     assert len(bot.calls) == 1
+
+
+async def test_invalid_markdown_is_sent_plain_without_telegram_roundtrip():
+    bot = FakeBot()
+    result = await send_text(bot, 123, "Скобка (не экранирована)")
+    assert result.ok
+    assert result.used_plain_text
+    assert len(bot.calls) == 1
+    assert bot.calls[0]["parse_mode"] is None
+    assert "(" in bot.calls[0]["text"]

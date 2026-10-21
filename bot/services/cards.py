@@ -201,8 +201,8 @@ async def send_application_card(
             bot,
             env_admin_ids,
             "⚠️ По заявке "
-            f"`{application.public_id}` единственный проверяющий — сам участник. "
-            "Нужен второй проверяющий.",
+            f"`{application.public_id}` единственный проверяющий — сам участник\\. "
+            "Нужен второй проверяющий\\.",
         )
     return target
 

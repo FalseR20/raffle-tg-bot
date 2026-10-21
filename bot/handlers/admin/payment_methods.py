@@ -17,7 +17,12 @@ from bot.middlewares.admin import ManagersOnlyMiddleware
 from bot.services import notifications
 from bot.services.permissions import Permissions
 from bot.states import PaymentMethodWizard
-from bot.texts.markdown import MarkdownError, escape_markdown_v2, validate_markdown_v2
+from bot.texts.markdown import (
+    MarkdownError,
+    escape_markdown_v2,
+    safe_markdown,
+    validate_markdown_v2,
+)
 from bot.texts.telegram import markdown_from_entities
 from bot.utils.time import utcnow
 
@@ -84,7 +89,7 @@ async def on_method(
         bot,
         callback.message.chat.id,
         f"💳 *{escape_markdown_v2(method.title)}*\n\n"
-        f"{method.instructions_text}\n\n"
+        f"{safe_markdown(method.instructions_text)}\n\n"
         f"Статус: {'🟢 активен' if method.is_active else '⚪️ выключен'}",
         reply_markup=payment_method_card(method.organization_id, method.id, method.is_active),
     )
@@ -110,7 +115,7 @@ async def on_method_new(
     await notifications.send_text(
         bot,
         callback.message.chat.id,
-        "Введите название способа оплаты (до 64 символов), например «Карта BYN»:",
+        "Введите название способа оплаты \\(до 64 символов\\), например «Карта BYN»:",
         reply_markup=wizard_cancel(f"adm:methods:{organization_id}"),
     )
 
@@ -135,7 +140,7 @@ async def on_method_title(
         "• копируемые значения — в обратных кавычках: `1234 5678`\n"
         "• жирный: *текст*\n"
         "• ссылка: [текст](https://example\\.com)\n"
-        "• точку, тире, скобки и другие спецсимволы экранируйте: \\\\.",
+        "• точку, тире, скобки и другие спецсимволы экранируйте: \\.",
         reply_markup=wizard_cancel(f"adm:methods:{organization_id}"),
     )
 
@@ -367,7 +372,7 @@ async def on_method_preview(
     await notifications.send_text(
         bot,
         callback.message.chat.id,
-        f"👁 *{escape_markdown_v2(method.title)}*\n\n{method.instructions_text}",
+        f"👁 *{escape_markdown_v2(method.title)}*\n\n{safe_markdown(method.instructions_text)}",
     )
 
 

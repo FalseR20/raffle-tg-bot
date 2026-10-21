@@ -160,6 +160,11 @@ def is_valid_markdown_v2(text: str) -> bool:
     return True
 
 
+def safe_markdown(text: str) -> str:
+    """Return valid MarkdownV2 unchanged, otherwise escape it as plain text."""
+    return text if is_valid_markdown_v2(text) else escape_markdown_v2(text)
+
+
 _LINK_RE = re.compile(r"\[([^\]\\]*(?:\\.[^\]\\]*)*)\]\(([^)\\]*(?:\\.[^)\\]*)*)\)")
 
 

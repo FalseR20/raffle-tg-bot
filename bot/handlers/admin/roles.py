@@ -169,7 +169,7 @@ async def on_add_role(
     await notifications.send_text(
         bot,
         callback.message.chat.id,
-        "Введите Telegram ID пользователя или перешлите его сообщение.",
+        "Введите Telegram ID пользователя или перешлите его сообщение\\.",
         reply_markup=wizard_cancel("adm:roles"),
     )
 
