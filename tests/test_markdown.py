@@ -75,6 +75,15 @@ def test_url_escaping_only_escapes_parentheses_and_backslashes():
     assert escape_url("https://example.org/a)b") == "https://example.org/a\\)b"
 
 
+def test_urls_with_open_parentheses_and_brackets_are_valid():
+    for url in (
+        "https://example.org/a_(b)",
+        "https://example.org/a[b]",
+        "https://example.org/a(b)",
+    ):
+        assert is_valid_markdown_v2(f"[x]({escape_url(url)})")
+
+
 def test_to_plain_text_strips_markup_and_escapes():
     assert to_plain_text("*Жирный* и `код`\\. [сайт](https://x\\.y)") == (
         "Жирный и код. сайт (https://x.y)"

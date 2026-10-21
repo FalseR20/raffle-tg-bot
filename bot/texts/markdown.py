@@ -55,8 +55,8 @@ def _validate_url(url: str) -> None:
                 raise MarkdownError("dangling escape in link URL")
             index += 2
             continue
-        if char in "()[]":
-            raise MarkdownError(f"unescaped {char!r} in link URL")
+        if char == ")":
+            raise MarkdownError("unescaped ')' in link URL")
         index += 1
 
 

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from aiogram.exceptions import TelegramBadRequest
 
 from bot.db.enums import ReceiptType
-from bot.services.cards import send_receipt_to_chat
+from bot.services.cards import edit_review_card, send_receipt_to_chat
 
 
 class FakeStorage:
@@ -33,3 +33,28 @@ async def test_file_id_failure_falls_back_to_rustfs_object():
     assert len(bot.documents) == 2
     assert bot.documents[0] == "telegram-file-id"
     assert getattr(bot.documents[1], "data", None) == b"%PDF-1.4 fallback"
+
+
+class EditBot:
+    def __init__(self) -> None:
+        self.texts: list[str] = []
+
+    async def edit_message_caption(self, **kwargs):
+        raise TelegramBadRequest(method=None, message="there is no caption")
+
+    async def edit_message_text(self, **kwargs):
+        self.texts.append(kwargs["text"])
+        return SimpleNamespace(message_id=2)
+
+
+async def test_long_card_text_fallback_can_be_edited_as_text():
+    application = SimpleNamespace(
+        public_id="A-2026-000123",
+        card_chat_id=10,
+        card_message_id=11,
+        receipt_type=ReceiptType.PDF,
+    )
+    bot = EditBot()
+    await edit_review_card(bot, application, "*Карточка* " + "x" * 1500)
+    assert bot.texts
+    assert "Карточка" in bot.texts[0]

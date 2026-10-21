@@ -223,6 +223,7 @@ async def test_revision_preserves_original_submitted_at(session_factory):
         # The original draft is older than the draft TTL. That must not block
         # an already submitted application from uploading a revised receipt.
         application.created_at = datetime.now(UTC) - timedelta(days=2)
+        application.receipt_object_key = "receipts/old.pdf"
     async with session_scope(session_factory) as session:
         application = await session.get(type(application), application.id)
         result = await accept_receipt(
@@ -244,6 +245,7 @@ async def test_revision_preserves_original_submitted_at(session_factory):
         )
         assert result.application.submitted_at == original
         assert result.application.status is ApplicationStatus.PENDING_REVIEW
+        assert result.previous_object_key == "receipts/old.pdf"
 
 
 @pytest.mark.parametrize(

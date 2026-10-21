@@ -102,6 +102,7 @@ async def test_csv_and_xlsx_contents(session_factory, env_settings):
     assert applications.max_row == 4
     headers = [cell.value for cell in applications[1]]
     assert headers[:4] == ["raffle", "application_id", "payment_code", "organization"]
+    assert applications.cell(row=2, column=10).data_type == "n"
     participants = workbook["Participants"]
     assert participants.max_row == 3
     tickets = workbook["Tickets"]
@@ -109,11 +110,29 @@ async def test_csv_and_xlsx_contents(session_factory, env_settings):
     ticket_numbers = [tickets.cell(row=index, column=1).value for index in range(2, 6)]
     assert ticket_numbers == [1, 2, 3, 4]
 
+    summary = workbook["Summary"]
+    summary_rows = [[cell.value for cell in row] for row in summary.iter_rows()]
+    assert summary_rows[0][0] == "organization"
+    assert sum(1 for row in summary_rows if row[0] == "organization") == 1
+    raffle_header_index = next(
+        index for index, row in enumerate(summary_rows) if row[0] == "raffle"
+    )
+    assert summary_rows[raffle_header_index + 1][2] == 2
+    assert summary_rows[raffle_header_index + 1][4] == 4
+
     restricted_book = load_workbook(io.BytesIO(restricted.data))
     assert "Participants" not in restricted_book.sheetnames
     restricted_apps = restricted_book["Applications"]
     assert restricted_apps.max_row == 2
     assert restricted_apps.cell(row=2, column=4).value == "Org A"
+
+    restricted_summary = restricted_book["Summary"]
+    restricted_rows = [[cell.value for cell in row] for row in restricted_summary.iter_rows()]
+    restricted_header_index = next(
+        index for index, row in enumerate(restricted_rows) if row[0] == "raffle"
+    )
+    assert restricted_rows[restricted_header_index + 1][2] == 1
+    assert restricted_rows[restricted_header_index + 1][4] == 1
 
 
 async def _load(session, raffle):

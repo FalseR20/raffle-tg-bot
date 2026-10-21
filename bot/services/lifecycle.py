@@ -55,7 +55,11 @@ async def retry_user_notifications(
         )
         .order_by(Application.reviewed_at)
         .limit(limit)
-        .options(selectinload(Application.user), selectinload(Application.organization))
+        .options(
+            selectinload(Application.user),
+            selectinload(Application.organization),
+            selectinload(Application.raffle),
+        )
     )
     applications = list((await session.execute(stmt)).scalars())
     delivered = 0
@@ -75,8 +79,8 @@ async def retry_user_notifications(
             ),
             total_tickets=tickets,
             all_numbers=ru.ranges_display(ranges),
-            channel_title=settings.channel_title,
-            channel_url=settings.channel_url,
+            channel_title=application.raffle.channel_title or settings.channel_title,
+            channel_url=application.raffle.channel_url or settings.channel_url,
         )
         result = await notifications.send_text(bot, application.user_id, text)
         if result.ok:

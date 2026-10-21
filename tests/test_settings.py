@@ -40,6 +40,8 @@ def test_parse_setting_values(key, raw, expected):
         ("confirm_two_step", "maybe"),
         ("timezone", "Mars/Olympus"),
         ("rules_url", "ftp://example.org"),
+        ("channel_url", "not-a-url"),
+        ("channel_url", "https://example.org/a b"),
         ("management_log_chat_id", "abc"),
         ("unknown", "value"),
     ],
@@ -65,3 +67,5 @@ async def test_database_timezone_override_is_loaded(session_factory, env_setting
         assert runtime.timezone_name == "Europe/Moscow"
         assert runtime.max_donation == Decimal("123.45")
         assert runtime.receipt_max_mb == env_settings.receipt_max_mb
+        assert runtime.default_ticket_price == env_settings.default_ticket_price
+        assert runtime.default_min_amount == env_settings.default_min_amount

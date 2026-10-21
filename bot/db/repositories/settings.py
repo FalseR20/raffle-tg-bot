@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +27,7 @@ async def set_value(session: AsyncSession, key: str, value: Any, *, updated_by: 
         .values(key=key, value=value, updated_by=updated_by)
         .on_conflict_do_update(
             index_elements=[Setting.key],
-            set_={"value": value, "updated_by": updated_by},
+            set_={"value": value, "updated_by": updated_by, "updated_at": func.now()},
         )
     )
     await session.execute(stmt)

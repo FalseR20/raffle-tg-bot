@@ -8,7 +8,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -29,6 +29,7 @@ from bot.db.repositories import applications as apps_repo
 from bot.domain.money import format_money_export
 from bot.domain.tickets import compress_ranges
 from bot.services.errors import ExportError
+from bot.utils.csv import safe_csv_value, safe_excel_value
 from bot.utils.time import format_datetime
 
 APPLICATION_COLUMNS = [
@@ -250,14 +251,15 @@ def _summary_rows(data: ExportData, raffle: Raffle, *, include_organizations: bo
         rows.append(["organization", "applications_count", "confirmed_count", "total_amount_byn"])
         rows.extend(_organization_summary(data))
         rows.append([])
+
+    confirmed = [app for app in data.all_applications if app.status is ApplicationStatus.CONFIRMED]
     confirmed_amount = sum(
-        (
-            app.amount or Decimal("0.00")
-            for app in data.all_applications
-            if app.status is ApplicationStatus.CONFIRMED
-        ),
+        (app.amount or Decimal("0.00") for app in confirmed),
         Decimal("0.00"),
     )
+    participants_count = len({app.user_id for app in data.all_applications})
+    tickets_issued = sum(app.tickets_awarded for app in confirmed)
+
     rows.append(
         [
             "raffle",
@@ -271,9 +273,9 @@ def _summary_rows(data: ExportData, raffle: Raffle, *, include_organizations: bo
         [
             raffle.title,
             raffle.prizes_count,
-            len(data.participants),
+            participants_count,
             format_money_export(confirmed_amount),
-            raffle.last_ticket_number,
+            tickets_issued,
         ]
     )
     return rows
@@ -289,7 +291,8 @@ def build_csv(data: ExportData, raffle: Raffle, tz: ZoneInfo) -> bytes:
     writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
     writer.writerow(APPLICATION_COLUMNS)
     for app in data.applications:
-        writer.writerow(_application_row(app, tz, raffle.title))
+        row = _application_row(app, tz, raffle.title)
+        writer.writerow([safe_csv_value(value) for value in row])
     return ("\ufeff" + buffer.getvalue()).encode("utf-8")
 
 
@@ -297,11 +300,28 @@ def build_xlsx(data: ExportData, raffle: Raffle, tz: ZoneInfo, *, is_org_rep: bo
     workbook = Workbook()
     workbook.remove(workbook.active)
 
-    def add_sheet(title: str, headers: list[str], rows: list[list]) -> None:
+    def add_sheet(
+        title: str,
+        headers: list[str],
+        rows: list[list],
+        *,
+        prepend_headers: bool = True,
+        money_columns: frozenset[int] = frozenset(),
+    ) -> None:
         sheet = workbook.create_sheet(title)
-        sheet.append(headers)
+        if prepend_headers:
+            sheet.append(headers)
         for row in rows:
-            sheet.append(row)
+            converted = []
+            for index, value in enumerate(row, start=1):
+                if index in money_columns and value not in (None, ""):
+                    try:
+                        converted.append(Decimal(str(value)))
+                        continue
+                    except InvalidOperation:
+                        pass
+                converted.append(safe_excel_value(value))
+            sheet.append(converted)
         header_font = Font(bold=True, color="FFFFFF")
         fill = PatternFill("solid", fgColor="305496")
         for cell in sheet[1]:
@@ -309,7 +329,12 @@ def build_xlsx(data: ExportData, raffle: Raffle, tz: ZoneInfo, *, is_org_rep: bo
             cell.fill = fill
             cell.alignment = Alignment(vertical="center", wrap_text=True)
         sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = sheet.dimensions
+        if prepend_headers:
+            sheet.auto_filter.ref = sheet.dimensions
+        for row in sheet.iter_rows(min_row=2):
+            for index in money_columns:
+                if index <= len(row):
+                    row[index - 1].number_format = "0.00"
         for index, header in enumerate(headers, start=1):
             width = max(
                 12,
@@ -330,18 +355,27 @@ def build_xlsx(data: ExportData, raffle: Raffle, tz: ZoneInfo, *, is_org_rep: bo
         "Applications",
         APPLICATION_COLUMNS,
         [_application_row(app, tz, raffle.title) for app in data.applications],
+        money_columns=frozenset({10}),
     )
     if not is_org_rep:
         add_sheet(
             "Participants",
             PARTICIPANT_COLUMNS,
             _participant_rows(data, tz, raffle.title),
+            money_columns=frozenset({6}),
         )
-    add_sheet("Tickets", TICKET_COLUMNS, _ticket_rows(data, raffle.title))
+    add_sheet(
+        "Tickets",
+        TICKET_COLUMNS,
+        _ticket_rows(data, raffle.title),
+        money_columns=frozenset({7}),
+    )
     add_sheet(
         "Summary",
         SUMMARY_COLUMNS,
         _summary_rows(data, raffle, include_organizations=not is_org_rep),
+        prepend_headers=False,
+        money_columns=frozenset({4}),
     )
 
     output = io.BytesIO()

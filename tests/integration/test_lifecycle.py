@@ -218,12 +218,23 @@ async def test_input_validation(session_factory):
 
 async def test_stop_acceptance_then_finish_allowed(session_factory):
     async with session_scope(session_factory) as session:
+        user = await make_user(session, 500)
         org = await make_organization(session)
         raffle = await make_raffle(session, organizations=[org])
+        draft = await make_application(
+            session,
+            raffle=raffle,
+            user=user,
+            organization=org,
+            amount=Decimal("5"),
+            status=ApplicationStatus.AWAITING_RECEIPT,
+        )
     async with session_scope(session_factory) as session:
         raffle_row = await session.get(type(raffle), raffle.id)
         await stop_acceptance(session, actor=ADMIN, raffle=raffle_row, now=datetime.now(UTC))
         assert raffle_row.status is RaffleStatus.CLOSED
+    async with session_factory() as session:
+        assert (await session.get(type(draft), draft.id)).status is ApplicationStatus.EXPIRED
 
 
 async def test_activation_requires_active_payment_method(session_factory):

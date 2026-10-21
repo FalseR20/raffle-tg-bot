@@ -253,6 +253,9 @@ async def stop_acceptance(
         raise InvalidStateError("Остановить приём можно только у активного розыгрыша.")
     raffle.status = RaffleStatus.CLOSED
     await session.flush()
+    from bot.services.applications import expire_raffle_drafts
+
+    await expire_raffle_drafts(session, raffle_id=raffle.id, now=now, reason="acceptance_stopped")
     await audit_repo.log(
         session,
         entity_type="raffle",
@@ -273,6 +276,9 @@ async def close_due(session: AsyncSession, *, raffle: Raffle, now: datetime) -> 
         return False
     raffle.status = RaffleStatus.CLOSED
     await session.flush()
+    from bot.services.applications import expire_raffle_drafts
+
+    await expire_raffle_drafts(session, raffle_id=raffle.id, now=now, reason="deadline")
     await audit_repo.log(
         session,
         entity_type="raffle",
@@ -357,12 +363,21 @@ async def finish(
     now: datetime,
 ) -> FinishResult:
     _assert_manage(actor)
+
+    # Lock applications before the raffle, matching the review/void lock order.
+    # This prevents a concurrent rejection or revision from changing an
+    # application after it has been expired by finish.
+    pending = await apps_repo.pending_for_raffle(session, raffle.id, for_update=True)
+    drafts = await apps_repo.drafts_for_raffle(session, raffle.id, for_update=True)
+
+    locked_raffle = await raffles_repo.lock(session, raffle.id)
+    if locked_raffle is None:
+        raise NotFoundError("Розыгрыш не найден.")
+    raffle = locked_raffle
     if raffle.status is RaffleStatus.ACTIVE:
         raise InvalidStateError("Сначала остановите приём заявок.")
     if raffle.status is not RaffleStatus.CLOSED:
         raise InvalidStateError("Завершить можно только розыгрыш с остановленным приёмом.")
-
-    pending = await apps_repo.pending_for_raffle(session, raffle.id)
     if pending and not expire_pending:
         raise InvalidStateError(
             f"Осталось {len(pending)} заявок на проверке. Обработайте их или явно переведите в "
@@ -371,6 +386,7 @@ async def finish(
 
     expired: list[Application] = []
     for application in pending:
+        old = application.status
         application.status = ApplicationStatus.EXPIRED
         expired.append(application)
         await audit_repo.log(
@@ -381,16 +397,13 @@ async def finish(
             raffle_id=raffle.id,
             actor_id=actor.user_id,
             action="application_expired",
-            old_status=ApplicationStatus.PENDING_REVIEW.value,
+            old_status=old.value,
             new_status=ApplicationStatus.EXPIRED.value,
             payload={"reason": "raffle_finished"},
             at=now,
         )
 
-    drafts = await apps_repo.drafts_older_than(session, now + timedelta(seconds=1))
     for application in drafts:
-        if application.raffle_id != raffle.id:
-            continue
         old = application.status
         application.status = ApplicationStatus.EXPIRED
         expired.append(application)

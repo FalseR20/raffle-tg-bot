@@ -15,6 +15,8 @@ from zoneinfo import ZoneInfo
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from bot.utils.url import is_valid_http_url
+
 
 class ConfigurationError(RuntimeError):
     """Raised when the environment configuration is invalid."""
@@ -108,6 +110,15 @@ class Settings(BaseSettings):
     def _empty_str_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
             return None
+        return value
+
+    @field_validator("channel_url", "rules_url", "privacy_url")
+    @classmethod
+    def _validate_urls(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not is_valid_http_url(value):
+            raise ValueError("URL must start with http:// or https:// and contain a host")
         return value
 
     @field_validator("tz")

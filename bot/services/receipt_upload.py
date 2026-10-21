@@ -44,6 +44,7 @@ class UploadedReceipt:
     application: Application
     object_key: str
     receipt_type: ReceiptType
+    previous_object_key: str | None = None
 
 
 async def accept_receipt(
@@ -119,6 +120,7 @@ async def accept_receipt(
     if locked is None or locked.status.value not in {"awaiting_receipt", "revision_requested"}:
         await storage.delete(object_key)
         raise InvalidStateError("Статус заявки изменился, чек не принят.")
+    previous_object_key = locked.receipt_object_key
 
     try:
         updated = await attach_receipt(
@@ -153,7 +155,14 @@ async def accept_receipt(
         at=now,
     )
     return UploadedReceipt(
-        application=updated, object_key=object_key, receipt_type=info.receipt_type
+        application=updated,
+        object_key=object_key,
+        receipt_type=info.receipt_type,
+        previous_object_key=(
+            previous_object_key
+            if previous_object_key and previous_object_key != object_key
+            else None
+        ),
     )
 
 

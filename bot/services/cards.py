@@ -26,7 +26,12 @@ from bot.services.errors import NoReviewerAvailableError, ServiceError
 from bot.services.settings import RuntimeSettings
 from bot.services.storage import ReceiptStorage
 from bot.services.users import mention
-from bot.texts.markdown import CAPTION_LIMIT, escape_markdown_v2, to_plain_text
+from bot.texts.markdown import (
+    CAPTION_LIMIT,
+    MESSAGE_LIMIT,
+    escape_markdown_v2,
+    to_plain_text,
+)
 from bot.texts.ru import admin_card_text
 
 logger = get_logger(__name__)
@@ -136,7 +141,7 @@ async def send_application_card(
 
     try:
         if len(caption) <= CAPTION_LIMIT:
-            message = await _send_receipt(
+            card_message = await _send_receipt(
                 bot,
                 chat=target,
                 application=application,
@@ -145,7 +150,7 @@ async def send_application_card(
                 storage=storage,
             )
         else:
-            message = await _send_receipt(
+            await _send_receipt(
                 bot,
                 chat=target,
                 application=application,
@@ -160,8 +165,10 @@ async def send_application_card(
                 reply_markup=markup,
                 message_thread_id=target.thread_id,
             )
-            if not text_result.ok:
+            if not text_result.ok or text_result.message is None:
                 raise CardDeliveryError(text_result.error or "card text failed")
+            # The editable review card is the text message, not the receipt.
+            card_message = text_result.message
     except Exception as exc:
         await audit_repo.log(
             session,
@@ -177,7 +184,7 @@ async def send_application_card(
         raise CardDeliveryError(str(exc)) from exc
 
     application.card_chat_id = target.chat_id
-    application.card_message_id = message.message_id
+    application.card_message_id = card_message.message_id
     await session.flush()
     await audit_repo.log(
         session,
@@ -189,7 +196,7 @@ async def send_application_card(
         action="card_sent",
         payload={
             "chat_id": target.chat_id,
-            "message_id": message.message_id,
+            "message_id": card_message.message_id,
             "management_fallback": target.is_management_fallback,
         },
         at=now,
@@ -272,6 +279,33 @@ async def _send_by_file_id(bot: Bot, chat_id: int, application: Application, **k
     return await bot.send_document(chat_id, document=application.receipt_file_id, **kwargs)
 
 
+async def _edit_card_message(
+    bot: Bot,
+    application: Application,
+    text: str,
+    *,
+    caption: bool,
+    plain: bool,
+) -> None:
+    kwargs: dict = {"reply_markup": None}
+    if not plain:
+        kwargs["parse_mode"] = "MarkdownV2"
+    if caption:
+        await bot.edit_message_caption(
+            chat_id=application.card_chat_id,
+            message_id=application.card_message_id,
+            caption=text[:CAPTION_LIMIT],
+            **kwargs,
+        )
+    else:
+        await bot.edit_message_text(
+            chat_id=application.card_chat_id,
+            message_id=application.card_message_id,
+            text=text[:MESSAGE_LIMIT],
+            **kwargs,
+        )
+
+
 async def edit_review_card(
     bot: Bot, application: Application, text: str, *, caption: bool | None = None
 ) -> None:
@@ -279,50 +313,33 @@ async def edit_review_card(
         return
     if not text.strip():
         return
-    truncated = text[:CAPTION_LIMIT]
+    truncated = text[:MESSAGE_LIMIT]
     is_caption = caption if caption is not None else application.receipt_type is not None
     try:
-        if is_caption:
-            await bot.edit_message_caption(
-                chat_id=application.card_chat_id,
-                message_id=application.card_message_id,
-                caption=truncated,
-                parse_mode="MarkdownV2",
-                reply_markup=None,
-            )
-        else:
-            await bot.edit_message_text(
-                chat_id=application.card_chat_id,
-                message_id=application.card_message_id,
-                text=truncated,
-                parse_mode="MarkdownV2",
-                reply_markup=None,
-            )
+        await _edit_card_message(bot, application, truncated, caption=is_caption, plain=False)
+        return
     except TelegramBadRequest as exc:
         logger.warning("Could not edit review card %s: %s", application.public_id, exc)
+
+    # Long cards are sent as a separate text message while the application
+    # still has receipt_type set. Try the text variant before falling back to
+    # plain text.
+    if is_caption:
         try:
-            if is_caption:
-                await bot.edit_message_caption(
-                    chat_id=application.card_chat_id,
-                    message_id=application.card_message_id,
-                    caption=to_plain_text(truncated),
-                    reply_markup=None,
-                )
-            else:
-                await bot.edit_message_text(
-                    chat_id=application.card_chat_id,
-                    message_id=application.card_message_id,
-                    text=to_plain_text(truncated),
-                    reply_markup=None,
-                )
+            await _edit_card_message(bot, application, truncated, caption=False, plain=False)
+            return
         except TelegramBadRequest:
-            with contextlib.suppress(TelegramBadRequest):
-                await bot.edit_message_text(
-                    chat_id=application.card_chat_id,
-                    message_id=application.card_message_id,
-                    text=to_plain_text(truncated),
-                    reply_markup=None,
-                )
+            pass
+
+    plain_text = to_plain_text(truncated)
+    try:
+        await _edit_card_message(bot, application, plain_text, caption=is_caption, plain=True)
+        return
+    except TelegramBadRequest:
+        pass
+    if is_caption:
+        with contextlib.suppress(TelegramBadRequest):
+            await _edit_card_message(bot, application, plain_text, caption=False, plain=True)
 
 
 async def send_receipt_to_chat(

@@ -11,6 +11,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
+from sqlalchemy import text
 
 from bot.config import ConfigurationError, Settings, get_settings
 from bot.db.session import create_engine, create_session_factory, session_scope
@@ -121,8 +122,16 @@ async def run() -> None:
     except Exception as exc:
         logger.warning("Could not set bot commands: %s", exc)
 
+    async def _readiness() -> bool:
+        try:
+            async with engine.connect() as connection:
+                await connection.execute(text("SELECT 1"))
+            return await storage.healthcheck()
+        except Exception:
+            return False
+
     scheduler = BotScheduler(session_factory=session_factory, bot=bot, env=env, storage=storage)
-    health_server = await start_health_server(env.health_port)
+    health_server = await start_health_server(env.health_port, _readiness)
     await scheduler.start()
 
     try:

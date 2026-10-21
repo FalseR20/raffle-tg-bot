@@ -18,7 +18,13 @@ from bot.db.repositories import raffles as raffles_repo
 from bot.domain.money import AmountError, format_money, parse_amount
 from bot.domain.ordering import randomized_organizations
 from bot.domain.tickets import suggest_amount
-from bot.handlers.views import current_raffle, send_closed, send_no_raffle
+from bot.handlers.views import (
+    append_channel_button,
+    current_raffle,
+    raffle_channel,
+    send_closed,
+    send_no_raffle,
+)
 from bot.keyboards.participant import (
     draft_keyboard,
     instructions_keyboard,
@@ -50,6 +56,16 @@ async def _assert_consent(bot: Bot, chat_id: int, user: User, settings: RuntimeS
     return False
 
 
+async def _assert_participation_allowed(
+    bot: Bot, chat_id: int, user: User, settings: RuntimeSettings
+) -> bool:
+    """Re-check account state and consent before every participant mutation."""
+    if user.is_blocked:
+        await notifications.send_text(bot, chat_id, "Учётная запись заблокирована\\.")
+        return False
+    return await _assert_consent(bot, chat_id, user, settings)
+
+
 async def _show_organizations(
     session: AsyncSession,
     bot: Bot,
@@ -66,7 +82,7 @@ async def _show_organizations(
     if raffle.status is not RaffleStatus.ACTIVE:
         await send_closed(bot, chat_id, settings)
         return
-    if not await _assert_consent(bot, chat_id, user, settings):
+    if not await _assert_participation_allowed(bot, chat_id, user, settings):
         return
     organizations = await raffles_repo.enabled_organizations(session, raffle.id)
     organizations = [
@@ -75,13 +91,15 @@ async def _show_organizations(
         if await orgs_repo.has_active_payment_methods(session, organization.id)
     ]
     organizations = randomized_organizations(organizations, user_id=user.id, raffle_id=raffle.id)
+    keyboard = organizations_keyboard(
+        [(organization.id, organization.name) for organization in organizations]
+    )
+    append_channel_button(keyboard, *raffle_channel(raffle, settings))
     await notifications.send_text(
         bot,
         chat_id,
         ru.active_raffle_text(raffle, settings.timezone, has_consent=True),
-        reply_markup=organizations_keyboard(
-            [(organization.id, organization.name) for organization in organizations]
-        ),
+        reply_markup=keyboard,
     )
 
 
@@ -114,6 +132,7 @@ async def _continue_application(
     session: AsyncSession,
     bot: Bot,
     *,
+    user: User,
     application: Application,
     raffle: Raffle,
     settings: RuntimeSettings,
@@ -121,6 +140,8 @@ async def _continue_application(
     state: FSMContext,
     now: datetime,
 ) -> None:
+    if not await _assert_participation_allowed(bot, chat_id, user, settings):
+        return
     methods = await orgs_repo.load_payment_methods(
         session, application.organization_id, only_active=True
     )
@@ -188,7 +209,9 @@ async def on_organization_selected(
         await callback.answer()
         await send_closed(bot, callback.message.chat.id, runtime_settings)
         return
-    if not await _assert_consent(bot, callback.message.chat.id, user, runtime_settings):
+    if not await _assert_participation_allowed(
+        bot, callback.message.chat.id, user, runtime_settings
+    ):
         await callback.answer()
         return
     organization = await orgs_repo.get(session, organization_id)
@@ -228,6 +251,7 @@ async def on_organization_selected(
     await _continue_application(
         session,
         bot,
+        user=user,
         application=application,
         raffle=raffle,
         settings=runtime_settings,
@@ -249,6 +273,11 @@ async def on_payment_method_selected(
 ) -> None:
     method_id = int(callback.data.split(":", 1)[1])
     if callback.message is None:
+        return
+    if not await _assert_participation_allowed(
+        bot, callback.message.chat.id, user, runtime_settings
+    ):
+        await callback.answer()
         return
     raffle = await current_raffle(session, now)
     draft = await _current_draft(session, user, state)
@@ -423,6 +452,7 @@ async def on_draft_continue(
     await _continue_application(
         session,
         bot,
+        user=user,
         application=draft,
         raffle=raffle,
         settings=runtime_settings,
@@ -447,6 +477,11 @@ async def on_draft_restart(
     raffle = await current_raffle(session, now)
     draft = await _current_draft(session, user, state)
     if callback.message is None:
+        return
+    if not await _assert_participation_allowed(
+        bot, callback.message.chat.id, user, runtime_settings
+    ):
+        await callback.answer()
         return
     if draft is not None:
         await applications_service.cancel_by_user(
@@ -481,6 +516,7 @@ async def on_draft_restart(
     await _continue_application(
         session,
         bot,
+        user=user,
         application=application,
         raffle=raffle,
         settings=runtime_settings,
@@ -555,6 +591,8 @@ async def on_amount(
         await notifications.send_text(
             bot, message.chat.id, "Слишком много попыток\\. Подождите минуту\\."
         )
+        return
+    if not await _assert_participation_allowed(bot, message.chat.id, user, runtime_settings):
         return
     draft = await _current_draft(session, user, state)
     if draft is None:

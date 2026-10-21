@@ -16,7 +16,7 @@ from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import raffles as raffles_repo
 from bot.db.repositories import winners as winners_repo
 from bot.domain.money import format_money
-from bot.handlers.views import current_raffle, send_no_raffle
+from bot.handlers.views import current_raffle, raffle_channel, send_no_raffle
 from bot.keyboards.participant import (
     cancel_confirmation,
     channel_keyboard,
@@ -167,7 +167,7 @@ async def _send_results(
             winners=all_winners,
             user_winning_places=user_winners,
         ),
-        reply_markup=channel_keyboard(settings.channel_url, settings.channel_title),
+        reply_markup=channel_keyboard(*raffle_channel(raffle, settings)),
     )
 
 
@@ -382,6 +382,15 @@ async def on_upload_new_receipt(
         or application.status is not ApplicationStatus.REVISION_REQUESTED
     ):
         await callback.answer("Загрузить чек сейчас нельзя", show_alert=True)
+        return
+    if user.is_blocked:
+        await callback.answer("Учётная запись заблокирована", show_alert=True)
+        return
+    if not has_valid_consent(user, runtime_settings):
+        await callback.answer(
+            "Сначала примите правила и политику конфиденциальности: /start",
+            show_alert=True,
+        )
         return
     await state.set_state(ParticipantFlow.receipt)
     await state.update_data(application_id=application.id)

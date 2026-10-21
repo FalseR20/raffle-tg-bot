@@ -203,7 +203,7 @@ async def reject_application(
     }:
         raise AlreadyProcessedError("Заявка уже обработана.")
     _assert_reviewer_can_review(application, reviewer_id=reviewer_id, reviewer=reviewer)
-    raffle = await raffles_repo.get(session, application.raffle_id)
+    raffle = await raffles_repo.lock(session, application.raffle_id)
     if raffle is None:
         raise NotFoundError("Розыгрыш не найден.")
     if raffle.status.is_finished:
@@ -244,7 +244,7 @@ async def request_new_receipt(
     if application.status is not ApplicationStatus.PENDING_REVIEW:
         raise AlreadyProcessedError("Запросить новый чек можно только у заявки на проверке.")
     _assert_reviewer_can_review(application, reviewer_id=reviewer_id, reviewer=reviewer)
-    raffle = await raffles_repo.get(session, application.raffle_id)
+    raffle = await raffles_repo.lock(session, application.raffle_id)
     if raffle is None:
         raise NotFoundError("Розыгрыш не найден.")
     if raffle.status.is_finished:

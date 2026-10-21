@@ -15,6 +15,7 @@ from bot.db.enums import RaffleStatus
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import organizations as orgs_repo
 from bot.db.repositories import raffles as raffles_repo
+from bot.domain.money import format_money
 from bot.handlers.admin.common import parse_datetime, parse_decimal
 from bot.handlers.admin.raffles import (
     _get_raffle,
@@ -42,6 +43,7 @@ from bot.services.raffles import (
 from bot.states import RaffleEdit, RaffleWizard
 from bot.texts.markdown import escape_markdown_v2
 from bot.utils.time import utcnow
+from bot.utils.url import normalize_optional_http_url
 
 router = Router(name="admin_raffle_wizard")
 router.callback_query.middleware(ManagersOnlyMiddleware())
@@ -157,7 +159,14 @@ async def on_wizard_input(
     if step == "description":
         data["description"] = raw
         await state.update_data(**data)
-        await _prompt(bot, message.chat.id, "ticket_price", state)
+        await _prompt(
+            bot,
+            message.chat.id,
+            "ticket_price",
+            state,
+            default_callback="rw:default:ticket_price",
+            default_text=f"✅ {format_money(runtime_settings.default_ticket_price)} BYN",
+        )
         return
     if step == "ticket_price":
         try:
@@ -228,7 +237,14 @@ async def on_wizard_input(
         )
         return
     if step == "channel_url":
-        data["channel_url"] = runtime_settings.channel_url or "" if raw == "-" else raw
+        if raw == "-":
+            data["channel_url"] = runtime_settings.channel_url or ""
+        else:
+            try:
+                data["channel_url"] = normalize_optional_http_url(raw) or ""
+            except ValueError as exc:
+                await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
+                return
         await state.update_data(**data)
         await _prompt(
             bot,
@@ -251,11 +267,42 @@ async def _is_in_state(state: FSMContext, expected) -> bool:
     return await state.get_state() == expected.state
 
 
+@router.callback_query(F.data == "rw:default:ticket_price")
+async def on_default_ticket_price(
+    callback: CallbackQuery,
+    bot: Bot,
+    permissions: Permissions,
+    runtime_settings,
+    state: FSMContext,
+) -> None:
+    if callback.message is None:
+        return
+    if not _guard(callback, permissions):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    if not await _is_in_state(state, RaffleWizard.ticket_price):
+        await callback.answer("Шаг уже неактуален", show_alert=True)
+        return
+    data = await state.get_data()
+    data["ticket_price"] = str(runtime_settings.default_ticket_price)
+    await state.update_data(**data)
+    await callback.answer(f"Цена билета: {format_money(runtime_settings.default_ticket_price)} BYN")
+    await _prompt(
+        bot,
+        callback.message.chat.id,
+        "min_amount",
+        state,
+        default_callback="rw:default:min_amount",
+        default_text="✅ Равна цене билета",
+    )
+
+
 @router.callback_query(F.data == "rw:default:min_amount")
 async def on_default_min_amount(
     callback: CallbackQuery,
     bot: Bot,
     permissions: Permissions,
+    runtime_settings,
     state: FSMContext,
 ) -> None:
     if callback.message is None:
@@ -267,9 +314,10 @@ async def on_default_min_amount(
         await callback.answer("Шаг уже неактуален", show_alert=True)
         return
     data = await state.get_data()
-    data["min_amount"] = data["ticket_price"]
+    ticket_price = Decimal(str(data["ticket_price"]))
+    data["min_amount"] = str(max(runtime_settings.default_min_amount, ticket_price))
     await state.update_data(**data)
-    await callback.answer("Минимальная сумма = цена билета")
+    await callback.answer(f"Минимальная сумма: {format_money(data['min_amount'])} BYN")
     await _prompt(bot, callback.message.chat.id, "prizes_count", state)
 
 
@@ -545,9 +593,12 @@ async def _handle_edit_value(
             elif field == "prizes_count":
                 raffle_input = _replace(raffle_input, prizes_count=int(raw))
             elif field == "channel_url":
-                raffle_input = _replace(raffle_input, channel_url=raw)
+                raffle_input = _replace(
+                    raffle_input,
+                    channel_url=normalize_optional_http_url("" if raw == "-" else raw) or "",
+                )
             elif field == "channel_title":
-                raffle_input = _replace(raffle_input, channel_title=raw)
+                raffle_input = _replace(raffle_input, channel_title="" if raw == "-" else raw)
             else:
                 raise ValueError("Неизвестное поле.")
             await update_raffle(session, actor=permissions, raffle=raffle, data=raffle_input)

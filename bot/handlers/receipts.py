@@ -13,8 +13,9 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import User
-from bot.handlers.participant import _current_draft
+from bot.handlers.participant import _assert_participation_allowed, _current_draft
 from bot.handlers.views import send_closed
+from bot.logging import get_logger
 from bot.services import notifications
 from bot.services.cards import send_application_card
 from bot.services.errors import (
@@ -31,6 +32,7 @@ from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
 
 router = Router(name="participant_receipts")
+logger = get_logger(__name__)
 
 
 @router.message(F.chat.type == "private", F.photo | F.document)
@@ -57,6 +59,8 @@ async def on_receipt(
         await notifications.send_text(
             bot, message.chat.id, "Слишком много загрузок\\. Попробуйте позже\\."
         )
+        return
+    if not await _assert_participation_allowed(bot, message.chat.id, user, runtime_settings):
         return
 
     draft = await _current_draft(session, user, state)
@@ -113,6 +117,14 @@ async def on_receipt(
             now=now,
         )
         await session.commit()
+        if result.previous_object_key:
+            try:
+                await storage.delete(result.previous_object_key)
+            except Exception:
+                logger.warning(
+                    "Could not delete previous receipt object %s",
+                    result.previous_object_key,
+                )
     except RaffleNotAcceptingError:
         await state.clear()
         await send_closed(bot, message.chat.id, runtime_settings)

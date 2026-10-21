@@ -220,8 +220,8 @@ async def _after_confirmation(
         new_numbers=str(result.range),
         total_tickets=result.total_tickets,
         all_numbers=ranges,
-        channel_title=settings.channel_title,
-        channel_url=settings.channel_url,
+        channel_title=application.raffle.channel_title or settings.channel_title,
+        channel_url=application.raffle.channel_url or settings.channel_url,
     )
     delivery = await notifications.send_text(
         bot,

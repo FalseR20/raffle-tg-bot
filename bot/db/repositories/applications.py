@@ -220,7 +220,9 @@ async def count_by_status(session: AsyncSession, raffle_id: int) -> dict[Applica
     return {status: int(count) for status, count in (await session.execute(stmt)).all()}
 
 
-async def pending_for_raffle(session: AsyncSession, raffle_id: int) -> list[Application]:
+async def pending_for_raffle(
+    session: AsyncSession, raffle_id: int, *, for_update: bool = False
+) -> list[Application]:
     stmt = _with_relations(
         select(Application)
         .where(
@@ -231,7 +233,25 @@ async def pending_for_raffle(session: AsyncSession, raffle_id: int) -> list[Appl
         )
         .order_by(Application.submitted_at)
     )
+    if for_update:
+        stmt = stmt.with_for_update(of=Application).execution_options(populate_existing=True)
     return list((await session.execute(stmt)).scalars().unique())
+
+
+async def drafts_for_raffle(
+    session: AsyncSession, raffle_id: int, *, for_update: bool = False
+) -> list[Application]:
+    stmt = (
+        select(Application)
+        .where(
+            Application.raffle_id == raffle_id,
+            Application.status.in_([ApplicationStatus.DRAFT, ApplicationStatus.AWAITING_RECEIPT]),
+        )
+        .order_by(Application.created_at)
+    )
+    if for_update:
+        stmt = stmt.with_for_update(of=Application).execution_options(populate_existing=True)
+    return list((await session.execute(stmt)).scalars())
 
 
 async def drafts_older_than(session: AsyncSession, cutoff: datetime) -> list[Application]:

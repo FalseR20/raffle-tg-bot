@@ -19,6 +19,7 @@ from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import settings as settings_repo
 from bot.domain.money import format_money
 from bot.services.errors import ValidationError
+from bot.utils.url import normalize_http_url, normalize_optional_http_url
 
 SETTING_KEYS = (
     "channel_url",
@@ -50,6 +51,8 @@ class RuntimeSettings:
     support_contact: str | None
     management_log_chat_id: int | None
     max_donation: Decimal
+    default_ticket_price: Decimal
+    default_min_amount: Decimal
     receipt_max_mb: int
     receipt_retention_days: int
     confirm_two_step: bool
@@ -74,6 +77,8 @@ def environment_defaults(env: Settings) -> RuntimeSettings:
         support_contact=env.support_contact,
         management_log_chat_id=env.management_log_chat_id,
         max_donation=env.max_donation,
+        default_ticket_price=env.default_ticket_price,
+        default_min_amount=env.default_min_amount,
         receipt_max_mb=env.receipt_max_mb,
         receipt_retention_days=env.receipt_retention_days,
         confirm_two_step=env.confirm_two_step,
@@ -89,11 +94,20 @@ def parse_setting_value(key: str, raw: str | int | bool | None) -> Any:
     if key in {"channel_title", "rules_url", "privacy_url", "rules_version", "privacy_version"}:
         if not isinstance(raw, str) or not raw.strip():
             raise ValidationError("Значение не может быть пустым.")
-        if key in {"rules_url", "privacy_url"} and not raw.startswith(("https://", "http://")):
-            raise ValidationError("Ссылка должна начинаться с http:// или https://.")
+        if key in {"rules_url", "privacy_url"}:
+            try:
+                return normalize_http_url(raw)
+            except ValueError as exc:
+                raise ValidationError(str(exc)) from exc
         return raw.strip()
 
-    if key in {"channel_url", "support_contact", "greeting_text"}:
+    if key == "channel_url":
+        try:
+            return normalize_optional_http_url(raw)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
+    if key in {"support_contact", "greeting_text"}:
         if raw is None or (isinstance(raw, str) and not raw.strip()):
             return None
         return str(raw).strip()

@@ -58,7 +58,7 @@ async def send_text(
         logger.debug("MarkdownV2 validation failed; sending plain text")
         plain = truncate(to_plain_text(text), MESSAGE_LIMIT)
         try:
-            message = await _send_with_retry(bot, chat_id, plain, parse_mode=None, **kwargs)
+            message = await _send_plain(bot, chat_id, plain, **kwargs)
             return DeliveryResult(message=message, used_plain_text=True)
         except Exception as exc:
             return DeliveryResult(message=None, used_plain_text=True, error=str(exc))
@@ -74,16 +74,44 @@ async def send_text(
         return DeliveryResult(message=message, used_plain_text=False)
     except TelegramBadRequest as exc:
         if not fallback or "parse" not in str(exc).lower():
+            if "reply_markup" in kwargs:
+                logger.warning("Message rejected with reply markup; retrying without it: %s", exc)
+                without_markup = {
+                    key: value for key, value in kwargs.items() if key != "reply_markup"
+                }
+                try:
+                    message = await _send_with_retry(
+                        bot,
+                        chat_id,
+                        truncate(text, MESSAGE_LIMIT),
+                        parse_mode="MarkdownV2",
+                        **without_markup,
+                    )
+                    return DeliveryResult(message=message, used_plain_text=False)
+                except Exception as retry_exc:
+                    return DeliveryResult(message=None, used_plain_text=False, error=str(retry_exc))
             return DeliveryResult(message=None, used_plain_text=False, error=str(exc))
         logger.warning("MarkdownV2 rejected by Telegram; falling back to plain text: %s", exc)
         plain = truncate(to_plain_text(text), MESSAGE_LIMIT)
         try:
-            message = await _send_with_retry(bot, chat_id, plain, parse_mode=None, **kwargs)
+            message = await _send_plain(bot, chat_id, plain, **kwargs)
             return DeliveryResult(message=message, used_plain_text=True)
         except Exception as plain_exc:
             return DeliveryResult(message=None, used_plain_text=True, error=str(plain_exc))
     except Exception as exc:
         return DeliveryResult(message=None, used_plain_text=False, error=str(exc))
+
+
+async def _send_plain(bot: Bot, chat_id: int, text: str, **kwargs) -> Message:
+    """Send plain text, dropping an invalid keyboard if necessary."""
+    try:
+        return await _send_with_retry(bot, chat_id, text, parse_mode=None, **kwargs)
+    except TelegramBadRequest:
+        if "reply_markup" not in kwargs:
+            raise
+        logger.warning("Plain message rejected with reply markup; retrying without it")
+        without_markup = {key: value for key, value in kwargs.items() if key != "reply_markup"}
+        return await _send_with_retry(bot, chat_id, text, parse_mode=None, **without_markup)
 
 
 async def _send_with_retry(bot: Bot, chat_id: int, text: str, **kwargs) -> Message:

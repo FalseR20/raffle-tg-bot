@@ -6,6 +6,7 @@ import secrets
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from sqlalchemy.exc import IntegrityError as SAIntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.enums import ApplicationStatus, RaffleStatus, ReceiptType
@@ -79,21 +80,37 @@ async def start_draft(
     if len(applications) >= MAX_APPLICATIONS_PER_RAFFLE:
         raise ValidationError("Достигнут лимит заявок в этом розыгрыше.")
 
-    application = await apps_repo.create(
-        session,
-        raffle_id=raffle.id,
-        user_id=user.id,
-        organization_id=organization.id,
-        payment_code=await generate_payment_code(session, raffle.id),
-        status=ApplicationStatus.DRAFT,
-        currency="BYN",
-        amount=None,
-        tickets_awarded=0,
-        created_at=now,
-    )
-    # Create the totals row before any review transaction so that confirmation
-    # never inserts a child row while competing for the raffle row lock.
-    await participants_repo.ensure(session, raffle.id, user.id)
+    try:
+        application = await apps_repo.create(
+            session,
+            raffle_id=raffle.id,
+            user_id=user.id,
+            organization_id=organization.id,
+            payment_code=await generate_payment_code(session, raffle.id),
+            status=ApplicationStatus.DRAFT,
+            currency="BYN",
+            amount=None,
+            tickets_awarded=0,
+            created_at=now,
+        )
+        # Create the totals row before any review transaction so that confirmation
+        # never inserts a child row while competing for the raffle row lock.
+        await participants_repo.ensure(session, raffle.id, user.id)
+    except SAIntegrityError as exc:
+        await session.rollback()
+        raise InvalidStateError("У вас уже есть незавершённая заявка.") from exc
+
+    # Re-check the raffle under its row lock. This closes the race where an
+    # admin finishes the raffle between the initial check and the draft insert.
+    locked_raffle = await raffles_repo.lock(session, raffle.id)
+    if locked_raffle is None:
+        await session.rollback()
+        raise NotFoundError("Розыгрыш не найден.")
+    if not raffle_accepts(locked_raffle, now):
+        await session.rollback()
+        raise RaffleNotAcceptingError()
+    raffle = locked_raffle
+
     await audit_repo.log(
         session,
         entity_type="application",
@@ -116,6 +133,9 @@ async def choose_payment_method(
     method: PaymentMethod,
     now: datetime,
 ) -> Application:
+    application = await apps_repo.get_locked(session, application.id)
+    if application is None:
+        raise NotFoundError("Заявка не найдена.")
     if application.status not in {
         ApplicationStatus.DRAFT,
         ApplicationStatus.AWAITING_RECEIPT,
@@ -139,6 +159,9 @@ async def set_amount(
     min_amount: Decimal,
     max_amount: Decimal,
 ) -> None:
+    application = await apps_repo.get_locked(session, application.id)
+    if application is None:
+        raise NotFoundError("Заявка не найдена.")
     if application.status not in {
         ApplicationStatus.DRAFT,
         ApplicationStatus.AWAITING_RECEIPT,
@@ -303,6 +326,38 @@ async def expire_drafts(
             old_status=old_status.value,
             new_status=ApplicationStatus.EXPIRED.value,
             payload={"reason": "draft_ttl"},
+            at=now,
+        )
+    if expired:
+        await session.flush()
+    return expired
+
+
+async def expire_raffle_drafts(
+    session: AsyncSession,
+    *,
+    raffle_id: int,
+    now: datetime,
+    reason: str,
+) -> list[Application]:
+    """Expire every unfinished draft of a raffle when acceptance stops."""
+    drafts = await apps_repo.drafts_for_raffle(session, raffle_id, for_update=True)
+    expired: list[Application] = []
+    for application in drafts:
+        old_status = application.status
+        application.status = ApplicationStatus.EXPIRED
+        expired.append(application)
+        await audit_repo.log(
+            session,
+            entity_type="application",
+            entity_id=application.id,
+            application_id=application.id,
+            raffle_id=raffle_id,
+            actor_id=None,
+            action="application_expired",
+            old_status=old_status.value,
+            new_status=ApplicationStatus.EXPIRED.value,
+            payload={"reason": reason},
             at=now,
         )
     if expired:

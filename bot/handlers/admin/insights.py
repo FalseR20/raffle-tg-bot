@@ -30,6 +30,7 @@ from bot.services.statistics import build_statistics
 from bot.states import WinnerWizard
 from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
+from bot.utils.csv import safe_csv_value
 from bot.utils.time import format_datetime, utcnow
 
 router = Router(name="admin_insights")
@@ -240,16 +241,19 @@ async def on_audit_csv(
     for entry in entries:
         writer.writerow(
             [
-                entry.created_at.isoformat(),
-                entry.actor_id or "",
-                entry.action,
-                entry.entity_type,
-                entry.entity_id or "",
-                entry.application_id or "",
-                entry.raffle_id or "",
-                entry.old_status or "",
-                entry.new_status or "",
-                json.dumps(entry.payload, ensure_ascii=False) if entry.payload else "",
+                safe_csv_value(value)
+                for value in (
+                    entry.created_at.isoformat(),
+                    entry.actor_id or "",
+                    entry.action,
+                    entry.entity_type,
+                    entry.entity_id or "",
+                    entry.application_id or "",
+                    entry.raffle_id or "",
+                    entry.old_status or "",
+                    entry.new_status or "",
+                    json.dumps(entry.payload, ensure_ascii=False) if entry.payload else "",
+                )
             ]
         )
     data = ("\ufeff" + buffer.getvalue()).encode("utf-8")

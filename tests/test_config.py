@@ -47,6 +47,13 @@ def test_timezone_and_ports_are_validated():
         build_settings(health_port=0)
 
 
+def test_urls_are_validated():
+    with pytest.raises(ValidationError):
+        build_settings(channel_url="not-a-url")
+    with pytest.raises(ValidationError):
+        build_settings(rules_url="https://example.org/a b")
+
+
 def test_empty_optional_values_become_none():
     settings = build_settings(
         management_log_chat_id="", channel_url="", support_contact="", webhook_secret=""

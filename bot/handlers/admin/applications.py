@@ -383,8 +383,8 @@ async def on_app_notify(
             ),
             total_tickets=tickets,
             all_numbers=ru.ranges_display(ranges),
-            channel_title=runtime_settings.channel_title,
-            channel_url=runtime_settings.channel_url,
+            channel_title=application.raffle.channel_title or runtime_settings.channel_title,
+            channel_url=application.raffle.channel_url or runtime_settings.channel_url,
         )
     elif application.status is ApplicationStatus.REJECTED:
         text = ru.rejection_text(

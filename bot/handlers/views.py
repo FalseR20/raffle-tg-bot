@@ -27,6 +27,23 @@ from bot.services.users import has_valid_consent
 from bot.texts import ru
 
 
+def raffle_channel(raffle: Raffle, settings: RuntimeSettings) -> tuple[str | None, str | None]:
+    """Prefer the raffle channel, falling back to the global setting."""
+    return (
+        raffle.channel_url or settings.channel_url,
+        raffle.channel_title or settings.channel_title,
+    )
+
+
+def append_channel_button(
+    keyboard: InlineKeyboardMarkup, url: str | None, title: str | None
+) -> None:
+    if url:
+        keyboard.inline_keyboard.append(
+            [InlineKeyboardButton(text=f"📣 {title or 'Канал'}", url=url)]
+        )
+
+
 async def current_raffle(session: AsyncSession, now: datetime) -> Raffle | None:
     raffle = await raffles_repo.get_current(session)
     if raffle is not None and raffle.status is RaffleStatus.ACTIVE and raffle.end_at <= now:
@@ -94,11 +111,12 @@ async def send_start_screen(
             return
 
     if raffle.status is RaffleStatus.SCHEDULED:
+        channel_url, channel_title = raffle_channel(raffle, settings)
         await notifications.send_text(
             bot,
             chat_id,
             ru.scheduled_raffle_text(raffle, settings.timezone),
-            reply_markup=channel_keyboard(settings.channel_url, settings.channel_title),
+            reply_markup=channel_keyboard(channel_url, channel_title),
             message_thread_id=message_thread_id,
         )
         return
@@ -144,6 +162,7 @@ async def send_start_screen(
     keyboard = organizations_keyboard(
         [(organization.id, organization.name) for organization in organizations]
     )
+    append_channel_button(keyboard, *raffle_channel(raffle, settings))
     text = ru.active_raffle_text(raffle, settings.timezone, has_consent=True)
     await notifications.send_text(
         bot,
