@@ -427,6 +427,27 @@ async def finish(
             at=now,
         )
 
+    # A draft may have been inserted between the first query and the raffle
+    # lock. Re-check after the lock so it cannot survive in a finished raffle.
+    late_drafts = await apps_repo.drafts_for_raffle(session, raffle.id, for_update=True)
+    for application in late_drafts:
+        old = application.status
+        application.status = ApplicationStatus.EXPIRED
+        expired.append(application)
+        await audit_repo.log(
+            session,
+            entity_type="application",
+            entity_id=application.id,
+            application_id=application.id,
+            raffle_id=raffle.id,
+            actor_id=actor.user_id,
+            action="application_expired",
+            old_status=old.value,
+            new_status=ApplicationStatus.EXPIRED.value,
+            payload={"reason": "raffle_finished"},
+            at=now,
+        )
+
     raffle.status = RaffleStatus.FINISHED
     raffle.finished_at = now
     await session.flush()
