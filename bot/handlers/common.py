@@ -61,9 +61,6 @@ async def cmd_start(
         )
         return
 
-    if not users_service.has_valid_consent(user, runtime_settings):
-        await _send_consent(bot, message.chat.id, runtime_settings)
-        return
     await send_start_screen(
         session,
         bot,

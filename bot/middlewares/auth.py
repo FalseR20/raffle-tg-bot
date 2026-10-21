@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject
+from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 from aiogram.types import User as TgUser
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +27,10 @@ class AuthMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        tg_user: TgUser | None = getattr(event, "from_user", None)
+        actual = event
+        if isinstance(actual, Update):
+            actual = actual.message or actual.callback_query or actual
+        tg_user: TgUser | None = getattr(actual, "from_user", None)
         session: AsyncSession | None = data.get("session")
         if tg_user is None or tg_user.is_bot or session is None:
             return await handler(event, data)
