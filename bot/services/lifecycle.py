@@ -104,6 +104,44 @@ async def retry_user_notifications(
     return delivered
 
 
+async def purge_cancelled_applications(
+    session: AsyncSession,
+    storage: ReceiptStorage,
+    *,
+    limit: int = 50,
+) -> int:
+    """Delete legacy cancelled application rows and their receipt objects."""
+    stmt = (
+        select(Application)
+        .where(Application.status == ApplicationStatus.CANCELLED)
+        .order_by(Application.created_at)
+        .limit(limit)
+    )
+    removed = 0
+    for application in (await session.execute(stmt)).scalars():
+        key = application.receipt_object_key
+        if key:
+            try:
+                await storage.delete(key)
+            except Exception as exc:
+                await audit_repo.log(
+                    session,
+                    entity_type="application",
+                    entity_id=application.id,
+                    application_id=application.id,
+                    raffle_id=application.raffle_id,
+                    actor_id=None,
+                    action="receipt_delete_failed",
+                    payload={"error": str(exc)[:300], "reason": "cancelled_purge"},
+                )
+                continue
+        await session.delete(application)
+        removed += 1
+    if removed:
+        await session.flush()
+    return removed
+
+
 async def cleanup_receipt_objects(
     session: AsyncSession,
     storage: ReceiptStorage,
@@ -189,6 +227,7 @@ __all__ = [
     "LifecycleReport",
     "cleanup_receipt_objects",
     "notify_lifecycle_admins",
+    "purge_cancelled_applications",
     "retry_user_notifications",
     "run_lifecycle",
 ]

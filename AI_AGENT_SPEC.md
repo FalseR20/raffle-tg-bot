@@ -503,7 +503,7 @@ After successful upload:
 | `revision_requested` | Reviewer requested a new receipt |
 | `confirmed` | Payment confirmed, new tickets issued |
 | `rejected` | Final rejection, no tickets |
-| `cancelled` | Cancelled by user |
+| `cancelled` | Legacy user cancellation; new cancellations delete the application |
 | `expired` | Not processed before raffle finish, or draft expired |
 | `voided` | Confirmation cancelled under the void rules |
 
@@ -519,7 +519,7 @@ After successful upload:
 - `revision_requested`: button to upload a new receipt;
 - "Send another application" if the raffle is active.
 
-A user may cancel `draft`, `awaiting_receipt`, `pending_review`, or `revision_requested` if not processed. Cancellation is atomic: if a reviewer already confirmed, cancellation fails and the current status is shown. On cancellation, edit the organization card to "Cancelled" and disable its buttons.
+A user may cancel `draft`, `awaiting_receipt`, `pending_review`, or `revision_requested` if not processed. Cancellation is atomic: if a reviewer already confirmed, cancellation fails and the current status is shown. On cancellation, delete the application row (audit log keeps the public identifier and old status), edit the organization card to "Cancelled", disable its buttons, and delete the stored receipt object.
 
 ### 7.8. Multiple payments and cumulative tickets
 

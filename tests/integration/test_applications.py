@@ -6,8 +6,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 
 from bot.db.enums import ApplicationStatus, RaffleStatus
+from bot.db.models import Application, AuditLog
 from bot.db.session import session_scope
 from bot.services import applications as applications_service
 from bot.services.errors import (
@@ -77,7 +79,7 @@ async def test_only_one_draft_and_limit(session_factory):
                 user=user,
                 organization=org,
                 amount=Decimal("5"),
-                status=ApplicationStatus.CANCELLED,
+                status=ApplicationStatus.REJECTED,
             )
         with pytest.raises(ValidationError):
             await applications_service.start_draft(
@@ -121,6 +123,49 @@ async def test_cancel_after_confirmation_fails_atomically(session_factory):
     async with session_factory() as session:
         refreshed = await session.get(type(application), application.id)
         assert refreshed.status is ApplicationStatus.CONFIRMED
+
+
+async def test_user_cancellation_deletes_application_and_keeps_audit(session_factory):
+    async with session_scope(session_factory) as session:
+        user = await make_user(session, 500)
+        org = await make_organization(session)
+        raffle = await make_raffle(session, organizations=[org])
+        application = await make_application(
+            session,
+            raffle=raffle,
+            user=user,
+            organization=org,
+            amount=Decimal("5"),
+            status=ApplicationStatus.AWAITING_RECEIPT,
+        )
+        application.card_chat_id = -100500
+        application.card_message_id = 77
+        application_id = application.id
+        public_id = application.public_id
+
+    async with session_scope(session_factory) as session:
+        application = await session.get(Application, application_id)
+        cancelled = await applications_service.cancel_by_user(
+            session, application=application, user_id=user.id, now=datetime.now(UTC)
+        )
+        assert cancelled.public_id == public_id
+        assert cancelled.old_status is ApplicationStatus.AWAITING_RECEIPT
+        assert cancelled.card_chat_id == -100500
+        assert cancelled.receipt_object_key == f"receipts/{raffle.id}/{user.id}.pdf"
+
+    async with session_factory() as session:
+        assert await session.get(Application, application_id) is None
+        audit = (
+            await session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "application_cancelled",
+                    AuditLog.entity_id == str(application_id),
+                )
+            )
+        ).scalar_one()
+        assert audit.application_id is None
+        assert audit.old_status == "awaiting_receipt"
+        assert audit.payload == {"public_id": public_id, "deleted": True}
 
 
 async def test_amount_validation_and_preview(session_factory):

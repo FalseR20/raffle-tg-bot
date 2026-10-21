@@ -11,6 +11,7 @@ from bot.db.enums import ApplicationStatus, RaffleStatus
 from bot.db.session import session_scope
 from bot.services.errors import ExportError, InvalidStateError, ValidationError
 from bot.services.exports import build_tickets_pdf
+from bot.services.lifecycle import purge_cancelled_applications
 from bot.services.permissions import Permissions
 from bot.services.raffles import (
     RaffleInput,
@@ -30,6 +31,38 @@ from tests.helpers import (
 
 pytestmark = pytest.mark.integration
 ADMIN = Permissions(user_id=100, is_admin=True)
+
+
+class RecordingStorage:
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+
+    async def delete(self, key: str) -> None:
+        self.deleted.append(key)
+
+
+async def test_legacy_cancelled_applications_are_purged_with_receipts(session_factory):
+    async with session_scope(session_factory) as session:
+        user = await make_user(session, 500)
+        org = await make_organization(session)
+        raffle = await make_raffle(session, organizations=[org])
+        application = await make_application(
+            session,
+            raffle=raffle,
+            user=user,
+            organization=org,
+            amount=Decimal("5"),
+            status=ApplicationStatus.CANCELLED,
+        )
+        application_id = application.id
+        key = application.receipt_object_key
+
+    storage = RecordingStorage()
+    async with session_scope(session_factory) as session:
+        assert await purge_cancelled_applications(session, storage) == 1
+    async with session_factory() as session:
+        assert await session.get(type(application), application_id) is None
+    assert storage.deleted == [key]
 
 
 async def test_only_one_current_raffle(session_factory):

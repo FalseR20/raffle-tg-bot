@@ -166,3 +166,5 @@ rules, charity/tax requirements, personal data processing, age restrictions, pri
 and taxation. The bot does not publish results automatically.
 
 49. **Displayed amounts omit insignificant trailing zeros** (`5`, `15,5`) per product owner request. XLSX/CSV exports keep two decimals (`5.00`) for spreadsheet consistency.
+
+50. **User cancellation deletes the application.** Cancelling an unprocessed application removes its row instead of keeping a `cancelled` status. The audit log keeps `application_cancelled`, the public identifier and the old status with `application_id = NULL`; the review card is edited to "Cancelled" and the RustFS receipt object is removed.

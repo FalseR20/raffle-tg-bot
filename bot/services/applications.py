@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -35,6 +36,20 @@ PAYMENT_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 PAYMENT_CODE_LENGTH = 5
 MAX_APPLICATIONS_PER_RAFFLE = 20
 DRAFT_TTL = timedelta(hours=24)
+
+
+@dataclass(frozen=True)
+class CancelledApplication:
+    """Immutable snapshot returned after a user-cancelled application is deleted."""
+
+    id: int
+    public_id: str
+    raffle_id: int
+    old_status: ApplicationStatus
+    card_chat_id: int | None
+    card_message_id: int | None
+    receipt_type: ReceiptType | None
+    receipt_object_key: str | None
 
 
 async def generate_payment_code(session: AsyncSession, raffle_id: int) -> str:
@@ -278,7 +293,14 @@ async def cancel_by_user(
     application: Application,
     user_id: int,
     now: datetime,
-) -> Application:
+) -> CancelledApplication:
+    """Cancel an unprocessed application and delete its row.
+
+    The audit entry keeps the public identifier and old status; the foreign key
+    in ``audit_log`` is ``ON DELETE SET NULL``, so the history survives. The
+    returned snapshot contains the card and receipt details needed by handlers
+    after the row is gone.
+    """
     locked = await apps_repo.get_locked(session, application.id)
     if locked is None:
         raise NotFoundError("Заявка не найдена.")
@@ -288,9 +310,17 @@ async def cancel_by_user(
         raise AlreadyProcessedError(
             "Заявку уже нельзя отменить: она обработана. Текущий статус показан в «Мои заявки»."
         )
-    old_status = locked.status
-    locked.status = ApplicationStatus.CANCELLED
-    await session.flush()
+
+    snapshot = CancelledApplication(
+        id=locked.id,
+        public_id=locked.public_id,
+        raffle_id=locked.raffle_id,
+        old_status=locked.status,
+        card_chat_id=locked.card_chat_id,
+        card_message_id=locked.card_message_id,
+        receipt_type=locked.receipt_type,
+        receipt_object_key=locked.receipt_object_key,
+    )
     await audit_repo.log(
         session,
         entity_type="application",
@@ -299,11 +329,14 @@ async def cancel_by_user(
         raffle_id=locked.raffle_id,
         actor_id=user_id,
         action="application_cancelled",
-        old_status=old_status.value,
+        old_status=locked.status.value,
         new_status=ApplicationStatus.CANCELLED.value,
+        payload={"public_id": locked.public_id, "deleted": True},
         at=now,
     )
-    return locked
+    await session.delete(locked)
+    await session.flush()
+    return snapshot
 
 
 async def expire_drafts(

@@ -6,13 +6,14 @@ import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from typing import Protocol
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.db.enums import ApplicationStatus, RoleName
+from bot.db.enums import ApplicationStatus, ReceiptType, RoleName
 from bot.db.models import Application
 from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import audit as audit_repo
@@ -35,6 +36,16 @@ from bot.texts.markdown import (
 from bot.texts.ru import admin_card_text
 
 logger = get_logger(__name__)
+
+
+class ReviewCardView(Protocol):
+    """Fields required to edit an application card after the row is gone."""
+
+    public_id: str
+    card_chat_id: int | None
+    card_message_id: int | None
+    receipt_type: ReceiptType | None
+    receipt_object_key: str | None
 
 
 class CardDeliveryError(ServiceError):
@@ -281,7 +292,7 @@ async def _send_by_file_id(bot: Bot, chat_id: int, application: Application, **k
 
 async def _edit_card_message(
     bot: Bot,
-    application: Application,
+    application: ReviewCardView,
     text: str,
     *,
     caption: bool,
@@ -307,7 +318,7 @@ async def _edit_card_message(
 
 
 async def edit_review_card(
-    bot: Bot, application: Application, text: str, *, caption: bool | None = None
+    bot: Bot, application: ReviewCardView, text: str, *, caption: bool | None = None
 ) -> None:
     if application.card_chat_id is None or application.card_message_id is None:
         return
@@ -340,6 +351,30 @@ async def edit_review_card(
     if is_caption:
         with contextlib.suppress(TelegramBadRequest):
             await _edit_card_message(bot, application, plain_text, caption=False, plain=True)
+
+
+async def finalize_cancelled(
+    bot: Bot, application: ReviewCardView, storage: ReceiptStorage
+) -> None:
+    """Mark the review card as cancelled and remove the receipt object."""
+    try:
+        await edit_review_card(
+            bot,
+            application,
+            f"🚫 *Заявка {escape_markdown_v2(application.public_id)} отменена участником*",
+            caption=application.receipt_type is not None,
+        )
+    except Exception as exc:
+        logger.warning("Could not mark cancelled card %s: %s", application.public_id, exc)
+    if application.receipt_object_key:
+        try:
+            await storage.delete(application.receipt_object_key)
+        except Exception as exc:
+            logger.warning(
+                "Could not delete cancelled receipt object %s: %s",
+                application.receipt_object_key,
+                exc,
+            )
 
 
 async def send_receipt_to_chat(

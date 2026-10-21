@@ -24,8 +24,10 @@ from bot.keyboards.participant import (
 )
 from bot.services import applications as applications_service
 from bot.services import notifications
+from bot.services.cards import finalize_cancelled
 from bot.services.errors import ServiceError
 from bot.services.settings import RuntimeSettings
+from bot.services.storage import ReceiptStorage
 from bot.services.users import has_valid_consent
 from bot.states import ParticipantFlow
 from bot.texts import ru
@@ -329,6 +331,7 @@ async def on_cancel_confirm(
     bot: Bot,
     session: AsyncSession,
     user: User,
+    storage: ReceiptStorage,
     now: datetime,
 ) -> None:
     application_id = int(callback.data.rsplit(":", 1)[1])
@@ -347,20 +350,12 @@ async def on_cancel_confirm(
         await callback.answer(exc.user_message, show_alert=True)
         return
     await callback.answer("Заявка отменена")
+    await finalize_cancelled(bot, cancelled, storage)
     await notifications.send_text(
         bot,
         callback.message.chat.id,
         f"Заявка `{escape_markdown_v2(cancelled.public_id)}` отменена\\.",
     )
-    if cancelled.card_chat_id and cancelled.card_message_id:
-        from bot.services.cards import edit_review_card
-
-        await edit_review_card(
-            bot,
-            cancelled,
-            f"🚫 *Заявка {escape_markdown_v2(cancelled.public_id)} отменена участником*",
-            caption=cancelled.receipt_type is not None,
-        )
 
 
 @router.callback_query(F.data.startswith("my:upload:"))

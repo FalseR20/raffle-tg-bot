@@ -34,9 +34,11 @@ from bot.keyboards.participant import (
 )
 from bot.services import applications as applications_service
 from bot.services import notifications
+from bot.services.cards import finalize_cancelled
 from bot.services.errors import RaffleNotAcceptingError, ServiceError
 from bot.services.ratelimit import RateLimiter
 from bot.services.settings import RuntimeSettings
+from bot.services.storage import ReceiptStorage
 from bot.services.users import has_valid_consent
 from bot.states import ParticipantFlow
 from bot.texts import ru
@@ -387,20 +389,24 @@ async def on_cancel_flow(
     bot: Bot,
     session: AsyncSession,
     user: User,
+    storage: ReceiptStorage,
     state: FSMContext,
     now: datetime,
 ) -> None:
     draft = await _current_draft(session, user, state)
     await state.clear()
+    cancelled = None
     if draft is not None:
         try:
-            await applications_service.cancel_by_user(
+            cancelled = await applications_service.cancel_by_user(
                 session, application=draft, user_id=user.id, now=now
             )
             await session.commit()
         except ServiceError as exc:
             await callback.answer(exc.user_message, show_alert=True)
             return
+    if cancelled is not None:
+        await finalize_cancelled(bot, cancelled, storage)
     await callback.answer("Заявка отменена")
     if callback.message:
         await notifications.send_text(
@@ -469,6 +475,7 @@ async def on_draft_restart(
     session: AsyncSession,
     user: User,
     runtime_settings: RuntimeSettings,
+    storage: ReceiptStorage,
     state: FSMContext,
     now: datetime,
 ) -> None:
@@ -483,13 +490,16 @@ async def on_draft_restart(
     ):
         await callback.answer()
         return
+    cancelled = None
     if draft is not None:
-        await applications_service.cancel_by_user(
+        cancelled = await applications_service.cancel_by_user(
             session, application=draft, user_id=user.id, now=now
         )
     await state.clear()
     if raffle is None or not pending_org_id:
         await session.commit()
+        if cancelled is not None:
+            await finalize_cancelled(bot, cancelled, storage)
         await callback.answer()
         await _show_organizations(
             session,
@@ -502,6 +512,9 @@ async def on_draft_restart(
         return
     organization = await orgs_repo.get(session, int(pending_org_id))
     if organization is None:
+        await session.commit()
+        if cancelled is not None:
+            await finalize_cancelled(bot, cancelled, storage)
         await callback.answer("Организация недоступна", show_alert=True)
         return
     try:
@@ -510,8 +523,11 @@ async def on_draft_restart(
         )
         await session.commit()
     except ServiceError as exc:
+        await session.rollback()
         await callback.answer(exc.user_message, show_alert=True)
         return
+    if cancelled is not None:
+        await finalize_cancelled(bot, cancelled, storage)
     await callback.answer()
     await _continue_application(
         session,
@@ -533,16 +549,20 @@ async def on_draft_cancel(
     session: AsyncSession,
     user: User,
     runtime_settings: RuntimeSettings,
+    storage: ReceiptStorage,
     state: FSMContext,
     now: datetime,
 ) -> None:
     draft = await _current_draft(session, user, state)
+    cancelled = None
     if draft is not None:
-        await applications_service.cancel_by_user(
+        cancelled = await applications_service.cancel_by_user(
             session, application=draft, user_id=user.id, now=now
         )
         await session.commit()
     await state.clear()
+    if cancelled is not None:
+        await finalize_cancelled(bot, cancelled, storage)
     await callback.answer("Черновик отменён")
     if callback.message:
         await _show_organizations(

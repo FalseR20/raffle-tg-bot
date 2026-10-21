@@ -17,6 +17,7 @@ from bot.services.cards import resend_missing_cards
 from bot.services.lifecycle import (
     cleanup_receipt_objects,
     notify_lifecycle_admins,
+    purge_cancelled_applications,
     retry_user_notifications,
     run_lifecycle,
 )
@@ -63,6 +64,14 @@ class BotScheduler:
                 await notify_lifecycle_admins(self.bot, self.env.admin_id_set, report)
             if report.expired_drafts:
                 logger.info("Expired %s drafts", len(report.expired_drafts))
+
+        try:
+            async with session_scope(self.session_factory) as session:
+                purged = await purge_cancelled_applications(session, self.storage)
+                if purged:
+                    logger.info("Deleted %s legacy cancelled applications", purged)
+        except Exception:
+            logger.exception("Cancelled application cleanup failed")
 
         try:
             async with session_scope(self.session_factory) as session:
