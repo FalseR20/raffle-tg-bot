@@ -10,6 +10,7 @@ from aiogram import Bot
 from aiogram.types import CallbackQuery, Message, TelegramObject
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.enums import RaffleStatus
 from bot.db.models import Raffle
 from bot.db.repositories import raffles as raffles_repo
 from bot.services import notifications
@@ -94,9 +95,19 @@ async def load_raffle(
     return raffle
 
 
-async def send_admin_menu(bot: Bot, chat_id: int, permissions: Permissions, name: str) -> None:
+async def send_admin_menu(
+    bot: Bot,
+    chat_id: int,
+    session: AsyncSession,
+    permissions: Permissions,
+    name: str,
+) -> None:
     from bot.keyboards.admin import main_menu
 
+    quick_raffles: list[tuple[int, str, RaffleStatus]] = []
+    if permissions.can_manage_raffles:
+        raffles = await raffles_repo.list_non_archived(session, limit=20)
+        quick_raffles = [(raffle.id, raffle.title, raffle.status) for raffle in raffles]
     role = (
         "администратор"
         if permissions.is_admin
@@ -104,9 +115,11 @@ async def send_admin_menu(bot: Bot, chat_id: int, permissions: Permissions, name
     )
     text = (
         f"⚙️ *Админ\\-панель*\n\n{escape_markdown_v2(name)} · {escape_markdown_v2(role)}\n\n"
-        "Выберите раздел:"
+        "Выберите раздел или откройте розыгрыш:"
     )
-    await notifications.send_text(bot, chat_id, text, reply_markup=main_menu(permissions))
+    await notifications.send_text(
+        bot, chat_id, text, reply_markup=main_menu(permissions, quick_raffles)
+    )
 
 
 def can_manage(permissions: Permissions) -> bool:

@@ -1,5 +1,6 @@
 from aiogram.types import BotCommand
 
+from bot.db.enums import RaffleStatus
 from bot.main import bot_commands
 from bot.services.permissions import Permissions
 
@@ -51,3 +52,30 @@ def test_finished_raffle_card_has_winners_button():
         for button in row
     ]
     assert "adm:winners:8" in archived_callbacks
+
+
+def test_main_menu_shows_shortcuts_to_non_archived_raffles():
+    from bot.keyboards.admin import main_menu
+
+    rows = main_menu(
+        Permissions(user_id=100, is_admin=True),
+        [
+            (7, "Активный розыгрыш", RaffleStatus.ACTIVE),
+            (8, "Завершённый розыгрыш", RaffleStatus.FINISHED),
+        ],
+    ).inline_keyboard
+    callbacks = [[button.callback_data for button in row] for row in rows]
+    assert callbacks[0] == ["adm:raffle:7"]
+    assert callbacks[1] == ["adm:raffle:8"]
+    assert callbacks[2] == ["adm:raffles", "adm:apps"]
+
+
+def test_org_rep_menu_does_not_show_raffle_shortcuts():
+    from bot.keyboards.admin import main_menu
+
+    rows = main_menu(
+        Permissions(user_id=200, org_rep_ids=frozenset({1})),
+        [(7, "Активный розыгрыш", RaffleStatus.ACTIVE)],
+    ).inline_keyboard
+    callbacks = [button.callback_data for row in rows for button in row]
+    assert "adm:raffle:7" not in callbacks

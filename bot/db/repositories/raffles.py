@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -60,6 +60,25 @@ async def list_all(
     stmt = select(Raffle).order_by(Raffle.created_at.desc()).limit(limit)
     if status is not None:
         stmt = stmt.where(Raffle.status == status)
+    return list((await session.execute(stmt)).scalars())
+
+
+async def list_non_archived(session: AsyncSession, *, limit: int = 20) -> list[Raffle]:
+    """Raffles worth a quick shortcut in the admin menu, current ones first."""
+    status_order = case(
+        (Raffle.status == RaffleStatus.ACTIVE, 0),
+        (Raffle.status == RaffleStatus.CLOSED, 1),
+        (Raffle.status == RaffleStatus.SCHEDULED, 2),
+        (Raffle.status == RaffleStatus.DRAFT, 3),
+        (Raffle.status == RaffleStatus.FINISHED, 4),
+        else_=5,
+    )
+    stmt = (
+        select(Raffle)
+        .where(Raffle.status != RaffleStatus.ARCHIVED)
+        .order_by(status_order, Raffle.created_at.desc())
+        .limit(limit)
+    )
     return list((await session.execute(stmt)).scalars())
 
 

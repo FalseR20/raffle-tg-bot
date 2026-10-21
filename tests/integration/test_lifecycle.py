@@ -8,6 +8,7 @@ from decimal import Decimal
 import pytest
 
 from bot.db.enums import ApplicationStatus, RaffleStatus
+from bot.db.repositories import raffles as raffles_repo
 from bot.db.session import session_scope
 from bot.services.errors import ExportError, InvalidStateError, ValidationError
 from bot.services.exports import build_tickets_pdf
@@ -63,6 +64,25 @@ async def test_legacy_cancelled_applications_are_purged_with_receipts(session_fa
     async with session_factory() as session:
         assert await session.get(type(application), application_id) is None
     assert storage.deleted == [key]
+
+
+async def test_non_archived_raffles_are_listed_for_admin_shortcuts(session_factory):
+    async with session_scope(session_factory) as session:
+        org = await make_organization(session)
+        active = await make_raffle(session, organizations=[org], title="Active")
+        finished = await make_raffle(
+            session, organizations=[org], title="Finished", status=RaffleStatus.FINISHED
+        )
+        archived = await make_raffle(
+            session, organizations=[org], title="Archived", status=RaffleStatus.ARCHIVED
+        )
+
+    async with session_factory() as session:
+        raffles = await raffles_repo.list_non_archived(session)
+        ids = [raffle.id for raffle in raffles]
+        assert ids[0] == active.id
+        assert finished.id in ids
+        assert archived.id not in ids
 
 
 async def test_only_one_current_raffle(session_factory):

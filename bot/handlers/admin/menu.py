@@ -5,6 +5,7 @@ from __future__ import annotations
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import User
 from bot.handlers.admin.common import ensure_private, send_admin_menu
@@ -21,6 +22,7 @@ router = Router(name="admin_menu")
 async def cmd_admin(
     message: Message,
     bot: Bot,
+    session: AsyncSession,
     user: User,
     permissions: Permissions,
     runtime_settings: RuntimeSettings,
@@ -33,7 +35,7 @@ async def cmd_admin(
     welcome = ""
     if runtime_settings.greeting_text:
         welcome = escape_markdown_v2(runtime_settings.greeting_text) + "\n\n"
-    await send_admin_menu(bot, message.chat.id, permissions, user.first_name or "—")
+    await send_admin_menu(bot, message.chat.id, session, permissions, user.first_name or "—")
     if welcome:
         await notifications.send_text(bot, message.chat.id, welcome)
 
@@ -42,6 +44,7 @@ async def cmd_admin(
 async def on_menu(
     callback: CallbackQuery,
     bot: Bot,
+    session: AsyncSession,
     user: User,
     permissions: Permissions,
 ) -> None:
@@ -54,7 +57,9 @@ async def on_menu(
         await callback.answer("Админ-панель доступна только в личном чате", show_alert=True)
         return
     await callback.answer()
-    await send_admin_menu(bot, callback.message.chat.id, permissions, user.first_name or "—")
+    await send_admin_menu(
+        bot, callback.message.chat.id, session, permissions, user.first_name or "—"
+    )
 
 
 @router.callback_query(F.data == "adm:help")

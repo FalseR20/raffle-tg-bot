@@ -7,6 +7,15 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.db.enums import RaffleStatus
 from bot.services.permissions import Permissions
 
+RAFFLE_STATUS_ICONS = {
+    RaffleStatus.DRAFT: "📝",
+    RaffleStatus.SCHEDULED: "⏳",
+    RaffleStatus.ACTIVE: "🟢",
+    RaffleStatus.CLOSED: "🔒",
+    RaffleStatus.FINISHED: "🏁",
+    RaffleStatus.ARCHIVED: "🗄",
+}
+
 
 def _rows(pairs: list[tuple[str, str]], columns: int = 2) -> list[list[InlineKeyboardButton]]:
     rows: list[list[InlineKeyboardButton]] = []
@@ -21,31 +30,46 @@ def _rows(pairs: list[tuple[str, str]], columns: int = 2) -> list[list[InlineKey
     return rows
 
 
-def main_menu(permissions: Permissions) -> InlineKeyboardMarkup:
+def main_menu(
+    permissions: Permissions,
+    raffles: list[tuple[int, str, RaffleStatus]] | None = None,
+) -> InlineKeyboardMarkup:
     if permissions.can_manage_raffles:
         rows = [
             [
-                InlineKeyboardButton(text="🎗 Розыгрыши", callback_data="adm:raffles"),
-                InlineKeyboardButton(text="📥 Заявки", callback_data="adm:apps"),
-            ],
-            [
-                InlineKeyboardButton(text="👥 Участники", callback_data="adm:participants"),
-                InlineKeyboardButton(text="🏢 Организации", callback_data="adm:orgs"),
-            ],
-            [
-                InlineKeyboardButton(text="💳 Способы оплаты", callback_data="adm:methods"),
-                InlineKeyboardButton(text="📤 Экспорт", callback_data="adm:exports"),
-            ],
-            [
-                InlineKeyboardButton(text="📊 Статистика", callback_data="adm:stats"),
-                InlineKeyboardButton(text="🧾 Аудит", callback_data="adm:audit"),
-            ],
-            [
-                InlineKeyboardButton(text="👤 Роли", callback_data="adm:roles"),
-                InlineKeyboardButton(text="⚙️ Настройки", callback_data="adm:settings"),
-            ],
-            [InlineKeyboardButton(text="🛡 Целостность", callback_data="adm:integrity")],
+                InlineKeyboardButton(
+                    text=f"{RAFFLE_STATUS_ICONS.get(status, '')} {title[:40]}",
+                    callback_data=f"adm:raffle:{raffle_id}",
+                )
+            ]
+            for raffle_id, title, status in (raffles or [])
+            if status is not RaffleStatus.ARCHIVED
         ]
+        rows.extend(
+            [
+                [
+                    InlineKeyboardButton(text="🎗 Розыгрыши", callback_data="adm:raffles"),
+                    InlineKeyboardButton(text="📥 Заявки", callback_data="adm:apps"),
+                ],
+                [
+                    InlineKeyboardButton(text="👥 Участники", callback_data="adm:participants"),
+                    InlineKeyboardButton(text="🏢 Организации", callback_data="adm:orgs"),
+                ],
+                [
+                    InlineKeyboardButton(text="💳 Способы оплаты", callback_data="adm:methods"),
+                    InlineKeyboardButton(text="📤 Экспорт", callback_data="adm:exports"),
+                ],
+                [
+                    InlineKeyboardButton(text="📊 Статистика", callback_data="adm:stats"),
+                    InlineKeyboardButton(text="🧾 Аудит", callback_data="adm:audit"),
+                ],
+                [
+                    InlineKeyboardButton(text="👤 Роли", callback_data="adm:roles"),
+                    InlineKeyboardButton(text="⚙️ Настройки", callback_data="adm:settings"),
+                ],
+                [InlineKeyboardButton(text="🛡 Целостность", callback_data="adm:integrity")],
+            ]
+        )
     else:
         org_id = next(iter(permissions.org_rep_ids)) if permissions.org_rep_ids else 0
         rows = [
@@ -68,18 +92,10 @@ def raffles_list(
     *,
     can_manage: bool,
 ) -> InlineKeyboardMarkup:
-    status_icon = {
-        RaffleStatus.DRAFT: "📝",
-        RaffleStatus.SCHEDULED: "⏳",
-        RaffleStatus.ACTIVE: "🟢",
-        RaffleStatus.CLOSED: "🔒",
-        RaffleStatus.FINISHED: "🏁",
-        RaffleStatus.ARCHIVED: "🗄",
-    }
     rows = [
         [
             InlineKeyboardButton(
-                text=f"{status_icon.get(status, '')} {title[:40]}",
+                text=f"{RAFFLE_STATUS_ICONS.get(status, '')} {title[:40]}",
                 callback_data=f"adm:raffle:{raffle_id}",
             )
         ]
