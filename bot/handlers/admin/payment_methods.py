@@ -18,6 +18,7 @@ from bot.services import notifications
 from bot.services.permissions import Permissions
 from bot.states import PaymentMethodWizard
 from bot.texts.markdown import MarkdownError, escape_markdown_v2, validate_markdown_v2
+from bot.texts.telegram import markdown_from_entities
 from bot.utils.time import utcnow
 
 router = Router(name="admin_payment_methods")
@@ -154,7 +155,7 @@ async def on_method_instructions(
 ) -> None:
     if not _guard(permissions):
         return
-    text = message.text or ""
+    text = markdown_from_entities(message.text or "", message.entities)
     try:
         _validate_instructions(text)
     except ValueError as exc:
@@ -278,7 +279,7 @@ async def on_method_edit_instructions(
     if method is None:
         await state.clear()
         return
-    text = message.text or ""
+    text = markdown_from_entities(message.text or "", message.entities)
     try:
         _validate_instructions(text)
     except ValueError as exc:
