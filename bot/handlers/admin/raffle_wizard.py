@@ -68,14 +68,38 @@ WIZARD_INPUT_STEPS = (
 _PROMPTS = {
     "title": "Введите название розыгрыша:",
     "description": "Введите описание и правила \\(обычный текст\\):",
-    "ticket_price": "Введите цену билета в BYN, например 5:",
-    "min_amount": "Введите минимальную сумму одной заявки или нажмите «Равна цене билета»:",
+    "ticket_price": "Введите цену билета в BYN:",
+    "min_amount": "Введите минимальную сумму заявки в BYN:",
     "prizes_count": "Введите количество призов \\(целое число\\):",
-    "start_at": "Введите дату и время начала: ДД\\.ММ\\.ГГГГ ЧЧ:ММ",
-    "end_at": "Введите дату и время окончания: ДД\\.ММ\\.ГГГГ ЧЧ:ММ",
-    "channel_url": "Введите ссылку на канал или нажмите «Взять из настроек»:",
-    "channel_title": "Введите название канала или нажмите «Взять из настроек»:",
+    "start_at": "Введите дату и время начала в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ:",
+    "end_at": "Введите дату и время окончания в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ:",
+    "channel_url": "Введите ссылку на канал или отправьте «\\-», чтобы пропустить:",
+    "channel_title": "Введите название канала или отправьте «\\-», чтобы пропустить:",
 }
+
+
+def _short_value(value: str, limit: int = 44) -> str:
+    return value if len(value) <= limit else value[: limit - 1] + "…"
+
+
+def _min_default(runtime_settings, ticket_price: Decimal) -> Decimal:
+    return max(runtime_settings.default_min_amount, ticket_price)
+
+
+def _min_default_text(runtime_settings, ticket_price: Decimal) -> str:
+    return f"✅ {format_money(_min_default(runtime_settings, ticket_price))} BYN"
+
+
+def _channel_url_default_text(runtime_settings) -> str | None:
+    if not runtime_settings.channel_url:
+        return None
+    return f"✅ {_short_value(runtime_settings.channel_url)}"
+
+
+def _channel_title_default_text(runtime_settings) -> str | None:
+    if not runtime_settings.channel_title:
+        return None
+    return f"✅ {_short_value(runtime_settings.channel_title)}"
 
 
 async def _prompt(
@@ -175,18 +199,23 @@ async def on_wizard_input(
             await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
             return
         await state.update_data(**data)
+        ticket_price = Decimal(data["ticket_price"])
         await _prompt(
             bot,
             message.chat.id,
             "min_amount",
             state,
             default_callback="rw:default:min_amount",
-            default_text="✅ Равна цене билета",
+            default_text=_min_default_text(runtime_settings, ticket_price),
         )
         return
     if step == "min_amount":
         try:
-            data["min_amount"] = data["ticket_price"] if raw == "-" else str(parse_decimal(raw))
+            data["min_amount"] = (
+                str(_min_default(runtime_settings, Decimal(data["ticket_price"])))
+                if raw == "-"
+                else str(parse_decimal(raw))
+            )
         except ValueError as exc:
             await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
             return
@@ -227,18 +256,19 @@ async def on_wizard_input(
             return
         data["end_at"] = end_at.isoformat()
         await state.update_data(**data)
+        channel_default = _channel_url_default_text(runtime_settings)
         await _prompt(
             bot,
             message.chat.id,
             "channel_url",
             state,
-            default_callback="rw:default:channel_url",
-            default_text="✅ Взять из настроек",
+            default_callback="rw:default:channel_url" if channel_default else None,
+            default_text=channel_default or "",
         )
         return
     if step == "channel_url":
         if raw == "-":
-            data["channel_url"] = runtime_settings.channel_url or ""
+            data["channel_url"] = ""
         else:
             try:
                 data["channel_url"] = normalize_optional_http_url(raw) or ""
@@ -246,17 +276,18 @@ async def on_wizard_input(
                 await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
                 return
         await state.update_data(**data)
+        title_default = _channel_title_default_text(runtime_settings)
         await _prompt(
             bot,
             message.chat.id,
             "channel_title",
             state,
-            default_callback="rw:default:channel_title",
-            default_text="✅ Взять из настроек",
+            default_callback="rw:default:channel_title" if title_default else None,
+            default_text=title_default or "",
         )
         return
     if step == "channel_title":
-        data["channel_title"] = runtime_settings.channel_title or "" if raw == "-" else raw
+        data["channel_title"] = "" if raw == "-" else raw
         await _start_organization_selection(
             bot, session, chat_id=message.chat.id, state=state, data=data
         )
@@ -293,7 +324,7 @@ async def on_default_ticket_price(
         "min_amount",
         state,
         default_callback="rw:default:min_amount",
-        default_text="✅ Равна цене билета",
+        default_text=_min_default_text(runtime_settings, Decimal(data["ticket_price"])),
     )
 
 
@@ -315,7 +346,7 @@ async def on_default_min_amount(
         return
     data = await state.get_data()
     ticket_price = Decimal(str(data["ticket_price"]))
-    data["min_amount"] = str(max(runtime_settings.default_min_amount, ticket_price))
+    data["min_amount"] = str(_min_default(runtime_settings, ticket_price))
     await state.update_data(**data)
     await callback.answer(f"Минимальная сумма: {format_money(data['min_amount'])} BYN")
     await _prompt(bot, callback.message.chat.id, "prizes_count", state)
@@ -340,14 +371,15 @@ async def on_default_channel_url(
     data = await state.get_data()
     data["channel_url"] = runtime_settings.channel_url or ""
     await state.update_data(**data)
-    await callback.answer("Взято из настроек")
+    await callback.answer(f"Ссылка: {_short_value(runtime_settings.channel_url or '')}")
+    title_default = _channel_title_default_text(runtime_settings)
     await _prompt(
         bot,
         callback.message.chat.id,
         "channel_title",
         state,
-        default_callback="rw:default:channel_title",
-        default_text="✅ Взять из настроек",
+        default_callback="rw:default:channel_title" if title_default else None,
+        default_text=title_default or "",
     )
 
 
@@ -370,7 +402,7 @@ async def on_default_channel_title(
         return
     data = await state.get_data()
     data["channel_title"] = runtime_settings.channel_title or ""
-    await callback.answer("Взято из настроек")
+    await callback.answer(f"Канал: {_short_value(runtime_settings.channel_title or '')}")
     await _start_organization_selection(
         bot, session, chat_id=callback.message.chat.id, state=state, data=data
     )

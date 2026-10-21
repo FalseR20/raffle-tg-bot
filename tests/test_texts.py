@@ -180,6 +180,24 @@ def test_all_admin_wizard_prompts_are_valid_markdown():
         validate_markdown_v2(prompt)
 
 
+def test_admin_wizard_default_buttons_show_values():
+    from bot.handlers.admin.raffle_wizard import (
+        _channel_title_default_text,
+        _channel_url_default_text,
+        _min_default_text,
+    )
+
+    settings = SimpleNamespace(
+        default_min_amount=Decimal("10"),
+        channel_url="https://t.me/charity",
+        channel_title="Благотворительный канал",
+    )
+    assert _min_default_text(settings, Decimal("5")) == "✅ 10 BYN"
+    assert _min_default_text(settings, Decimal("15")) == "✅ 15 BYN"
+    assert _channel_url_default_text(settings) == "✅ https://t.me/charity"
+    assert _channel_title_default_text(settings) == "✅ Благотворительный канал"
+
+
 def test_ranges_and_pluralization_in_texts():
     assert "1, 2–3" in ru.my_summary_text(
         raffle_title="X",
@@ -187,7 +205,7 @@ def test_ranges_and_pluralization_in_texts():
         tickets=3,
         ranges="1, 2–3",
     )
-    assert "2 номерка" in ru.amount_preview_text(
+    assert "2 номера" in ru.amount_preview_text(
         amount=Decimal("9"),
         current_amount=Decimal("9"),
         preview_amount=Decimal("18"),

@@ -88,4 +88,4 @@ def test_russian_pluralization():
     assert plural_ru(5, "билет", "билета", "билетов") == "билетов"
     assert plural_ru(11, "билет", "билета", "билетов") == "билетов"
     assert tickets_label(21) == "21 билет"
-    assert numbers_label(2) == "2 номерка"
+    assert numbers_label(2) == "2 номера"
