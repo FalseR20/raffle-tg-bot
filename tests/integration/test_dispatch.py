@@ -335,3 +335,27 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
         (55, f"adm:export_raffle:{raffle.id}"),
     ):
         await dp.feed_update(bot, _callback(100, callback_data, update_id))
+
+    # Finish the raffle, record a winner and expose results to the participant.
+    await dp.feed_update(bot, _callback(100, f"adm:raffle_stop_yes:{raffle.id}", 56))
+    await dp.feed_update(bot, _callback(100, f"adm:raffle_finish_yes:{raffle.id}:0", 57))
+    await dp.feed_update(bot, _callback(100, f"adm:winner_add:{raffle.id}", 58))
+    await dp.feed_update(bot, _message(100, "1", 59))
+    await dp.feed_update(bot, _message(100, "1", 60))
+    assert any("Победители" in text for _, text, _ in bot.messages)
+
+    bot.messages.clear()
+    await dp.feed_update(bot, _message(500, "/my", 61))
+    results = "\n".join(text for _, text, _ in bot.messages)
+    assert "Итоги" in results
+    assert "1 место — билет 1" in results
+    assert "Ваш результат" in results
+
+    bot.messages.clear()
+    await dp.feed_update(bot, _callback(500, "my:results", 62))
+    assert any("Итоги" in text for _, text, _ in bot.messages)
+
+    await dp.feed_update(bot, _callback(100, f"adm:raffle_archive_yes:{raffle.id}", 63))
+    bot.messages.clear()
+    await dp.feed_update(bot, _message(500, "/my", 64))
+    assert any("Итоги" in text for _, text, _ in bot.messages)

@@ -408,3 +408,41 @@ REJECTION_REASONS: dict[str, str] = {
     "duplicate": "чек уже был использован",
     "other": "другое",
 }
+
+
+def results_text(
+    *,
+    raffle_title: str,
+    confirmed_amount: Decimal,
+    tickets: int,
+    ranges: str,
+    prizes_count: int,
+    last_ticket_number: int,
+    winners: list[tuple[int, int]],
+    user_winning_places: list[tuple[int, int]],
+) -> str:
+    """Participant-facing results. Shows ticket numbers only, never names."""
+    lines = [
+        f"🏆 *Итоги: {esc(raffle_title)}*",
+        "",
+        f"💰 Подтверждено: *{esc(format_money(confirmed_amount))} BYN*",
+        f"🎫 Билеты: *{tickets_label(tickets)}*",
+        f"🔢 Ваши номера: {esc(ranges or '—')}",
+        f"🏅 Призов: {prizes_count} · всего билетов: {last_ticket_number}",
+        "",
+    ]
+    if winners:
+        lines.append("*Победители:*")
+        for place, ticket in winners:
+            lines.append(f"{place} место — билет {ticket}")
+    else:
+        lines.append("Победители ещё не объявлены\\.")
+    if user_winning_places:
+        lines.append("")
+        lines.append("🎉 *Ваш результат:*")
+        for place, ticket in user_winning_places:
+            lines.append(f"Билет {ticket} занял *{place}* место\\.")
+    elif winners and tickets:
+        lines.append("")
+        lines.append("Ваши номера не вошли в список победителей\\.")
+    return "\n".join(lines)

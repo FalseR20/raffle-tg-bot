@@ -13,9 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.db.enums import ApplicationStatus, RaffleStatus
 from bot.db.models import User
 from bot.db.repositories import applications as apps_repo
+from bot.db.repositories import raffles as raffles_repo
+from bot.db.repositories import winners as winners_repo
 from bot.domain.money import format_money
 from bot.handlers.views import current_raffle, send_no_raffle
-from bot.keyboards.participant import cancel_confirmation, my_applications_keyboard
+from bot.keyboards.participant import (
+    cancel_confirmation,
+    channel_keyboard,
+    my_applications_keyboard,
+)
 from bot.services import applications as applications_service
 from bot.services import notifications
 from bot.services.errors import ServiceError
@@ -39,7 +45,18 @@ async def cmd_my(
 ) -> None:
     raffle = await current_raffle(session, now)
     if raffle is None or raffle.status not in {RaffleStatus.ACTIVE, RaffleStatus.CLOSED}:
-        await send_no_raffle(bot, message.chat.id, runtime_settings)
+        results = await raffles_repo.latest_results_for_user(session, user.id)
+        if results is None:
+            await send_no_raffle(bot, message.chat.id, runtime_settings)
+            return
+        await _send_results(
+            session,
+            bot,
+            user=user,
+            raffle=results,
+            chat_id=message.chat.id,
+            settings=runtime_settings,
+        )
         return
     await _send_my(
         session, bot, user=user, raffle=raffle, chat_id=message.chat.id, settings=runtime_settings
@@ -60,7 +77,18 @@ async def on_my_list(
     if callback.message is None:
         return
     if raffle is None:
-        await send_no_raffle(bot, callback.message.chat.id, runtime_settings)
+        results = await raffles_repo.latest_results_for_user(session, user.id)
+        if results is None:
+            await send_no_raffle(bot, callback.message.chat.id, runtime_settings)
+            return
+        await _send_results(
+            session,
+            bot,
+            user=user,
+            raffle=results,
+            chat_id=callback.message.chat.id,
+            settings=runtime_settings,
+        )
         return
     await _send_my(
         session,
@@ -69,6 +97,77 @@ async def on_my_list(
         raffle=raffle,
         chat_id=callback.message.chat.id,
         settings=runtime_settings,
+    )
+
+
+@router.callback_query(F.data == "my:results")
+@router.callback_query(F.data.startswith("my:results:"))
+async def on_my_results(
+    callback: CallbackQuery,
+    bot: Bot,
+    session: AsyncSession,
+    user: User,
+    runtime_settings: RuntimeSettings,
+) -> None:
+    if callback.message is None:
+        return
+    raffle = None
+    if callback.data and callback.data.startswith("my:results:"):
+        raffle = await raffles_repo.get(session, int(callback.data.rsplit(":", 1)[1]))
+    else:
+        raffle = await raffles_repo.latest_results_for_user(session, user.id)
+    if raffle is None or raffle.status not in {
+        RaffleStatus.FINISHED,
+        RaffleStatus.ARCHIVED,
+    }:
+        await callback.answer("Результаты пока недоступны", show_alert=True)
+        return
+    applications = await apps_repo.for_user(session, raffle.id, user.id)
+    if not applications:
+        await callback.answer("Вы не участвовали в этом розыгрыше", show_alert=True)
+        return
+    await callback.answer()
+    await _send_results(
+        session,
+        bot,
+        user=user,
+        raffle=raffle,
+        chat_id=callback.message.chat.id,
+        settings=runtime_settings,
+    )
+
+
+async def _send_results(
+    session: AsyncSession,
+    bot: Bot,
+    *,
+    user: User,
+    raffle,
+    chat_id: int,
+    settings: RuntimeSettings,
+) -> None:
+    amount, tickets, ranges = await applications_service.user_totals(session, raffle.id, user.id)
+    winners = await winners_repo.list_for_raffle(session, raffle.id)
+    all_winners = [(winner.place, winner.ticket_number) for winner in winners]
+    user_winners = [
+        (winner.place, winner.ticket_number)
+        for winner in winners
+        if winner.application is not None and winner.application.user_id == user.id
+    ]
+    await notifications.send_text(
+        bot,
+        chat_id,
+        ru.results_text(
+            raffle_title=raffle.title,
+            confirmed_amount=amount,
+            tickets=tickets,
+            ranges=ru.ranges_display(ranges),
+            prizes_count=raffle.prizes_count,
+            last_ticket_number=raffle.last_ticket_number,
+            winners=all_winners,
+            user_winning_places=user_winners,
+        ),
+        reply_markup=channel_keyboard(settings.channel_url, settings.channel_title),
     )
 
 

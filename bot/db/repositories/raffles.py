@@ -29,6 +29,21 @@ async def get_current(session: AsyncSession) -> Raffle | None:
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def latest_results_for_user(session: AsyncSession, user_id: int) -> Raffle | None:
+    """Latest finished/archived raffle in which the user participated."""
+    stmt = (
+        select(Raffle)
+        .join(Application, Application.raffle_id == Raffle.id)
+        .where(
+            Application.user_id == user_id,
+            Raffle.status.in_([RaffleStatus.FINISHED, RaffleStatus.ARCHIVED]),
+        )
+        .order_by(Raffle.finished_at.desc().nulls_last(), Raffle.created_at.desc())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def latest_scheduled(session: AsyncSession) -> Raffle | None:
     stmt = (
         select(Raffle)

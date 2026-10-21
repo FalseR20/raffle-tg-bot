@@ -129,6 +129,16 @@ TEXTS = [
         tickets=3,
         ranges="1, 2–3",
     ),
+    ru.results_text(
+        raffle_title=HOSTILE,
+        confirmed_amount=Decimal("15"),
+        tickets=3,
+        ranges="1, 2–3",
+        prizes_count=3,
+        last_ticket_number=10,
+        winners=[(1, 3), (2, 5)],
+        user_winning_places=[(1, 3)],
+    ),
     ru.application_line(
         public_id="A-2026-000123",
         organization=HOSTILE,

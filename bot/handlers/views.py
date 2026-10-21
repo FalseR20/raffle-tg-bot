@@ -37,11 +37,20 @@ async def current_raffle(session: AsyncSession, now: datetime) -> Raffle | None:
 async def send_no_raffle(
     bot: Bot, chat_id: int, settings: RuntimeSettings, *, message_thread_id: int | None = None
 ) -> None:
+    rows = [[InlineKeyboardButton(text="🏆 Мои результаты", callback_data="my:results")]]
+    if settings.channel_url:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"📣 {settings.channel_title or 'Канал'}", url=settings.channel_url
+                )
+            ]
+        )
     await notifications.send_text(
         bot,
         chat_id,
         ru.no_active_raffle_text(settings.channel_title),
-        reply_markup=channel_keyboard(settings.channel_url, settings.channel_title),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
         message_thread_id=message_thread_id,
     )
 
