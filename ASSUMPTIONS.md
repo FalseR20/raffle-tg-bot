@@ -3,6 +3,21 @@
 The implementation follows `AI_AGENT_SPEC.md`. This file records choices made where the spec
 was ambiguous, plus product questions that remain open. Update it when a decision changes.
 
+## Verification status
+
+Automated verification completed in this environment:
+
+- `uv sync --all-groups --frozen`
+- `uv run ruff check .` and `uv run ruff format --check .`
+- `uv run pytest`: 164 tests against PostgreSQL 15 and RustFS
+- `uv run alembic upgrade head`, `downgrade base`, and `alembic check`
+- `docker compose build bot` and `docker compose config`
+- `scripts/backup.sh` against the local Compose services
+
+Not executed here because a real Telegram bot token and test accounts were not available: the
+manual end-to-end Telegram smoke test described in `README.md`. The dispatch smoke test exercises
+the same handler/middleware path with a fake Telegram transport.
+
 ## Product assumptions
 
 1. **One current raffle.** Only one raffle can be `active`/`closed`, enforced by a partial unique
