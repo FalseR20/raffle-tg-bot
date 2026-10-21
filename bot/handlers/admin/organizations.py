@@ -14,6 +14,7 @@ from bot.keyboards.admin import (
     organization_card,
     organizations_menu,
     wizard_cancel,
+    wizard_input,
 )
 from bot.middlewares.admin import ManagersOnlyMiddleware
 from bot.services import notifications
@@ -182,8 +183,12 @@ async def on_org_chat(
     await notifications.send_text(
         bot,
         message.chat.id,
-        "Введите ID темы форума или «-», если тема не нужна:",
-        reply_markup=wizard_cancel("adm:orgs"),
+        "Введите ID темы форума или нажмите «Без темы»:",
+        reply_markup=wizard_input(
+            "adm:orgs",
+            default_callback="orgwiz:default:thread",
+            default_text="✅ Без темы",
+        ),
     )
 
 
@@ -197,15 +202,72 @@ async def on_org_thread(
     try:
         thread_id = None if raw == "-" else int(raw)
     except ValueError:
-        await notifications.send_text(bot, message.chat.id, "Введите число или «-»\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "Введите число или нажмите «Без темы»\\."
+        )
         return
     await state.update_data(review_thread_id=thread_id)
+    await _prompt_contact(bot, message.chat.id, state)
+
+
+async def _prompt_contact(bot: Bot, chat_id: int, state: FSMContext) -> None:
     await state.set_state(OrganizationWizard.contact_url)
     await notifications.send_text(
         bot,
-        message.chat.id,
-        "Введите контактную ссылку или «-»:",
-        reply_markup=wizard_cancel("adm:orgs"),
+        chat_id,
+        "Введите контактную ссылку или нажмите «Без контакта»:",
+        reply_markup=wizard_input(
+            "adm:orgs",
+            default_callback="orgwiz:default:contact",
+            default_text="✅ Без контакта",
+        ),
+    )
+
+
+@router.callback_query(F.data == "orgwiz:default:thread")
+async def on_org_default_thread(
+    callback: CallbackQuery,
+    bot: Bot,
+    permissions: Permissions,
+    state: FSMContext,
+) -> None:
+    if callback.message is None:
+        return
+    if not _guard(permissions):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    if await state.get_state() != OrganizationWizard.review_thread.state:
+        await callback.answer("Шаг уже неактуален", show_alert=True)
+        return
+    await state.update_data(review_thread_id=None)
+    await callback.answer("Без темы")
+    await _prompt_contact(bot, callback.message.chat.id, state)
+
+
+@router.callback_query(F.data == "orgwiz:default:contact")
+async def on_org_default_contact(
+    callback: CallbackQuery,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    state: FSMContext,
+) -> None:
+    if callback.message is None:
+        return
+    if not _guard(permissions):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    if await state.get_state() != OrganizationWizard.contact_url.state:
+        await callback.answer("Шаг уже неактуален", show_alert=True)
+        return
+    await callback.answer("Без контакта")
+    await _create_organization(
+        bot,
+        session,
+        state=state,
+        permissions=permissions,
+        chat_id=callback.message.chat.id,
+        contact_url=None,
     )
 
 
@@ -220,7 +282,29 @@ async def on_org_contact(
     if not _guard(permissions):
         return
     raw = (message.text or "").strip()
+    await _create_organization(
+        bot,
+        session,
+        state=state,
+        permissions=permissions,
+        chat_id=message.chat.id,
+        contact_url=None if raw == "-" else raw,
+    )
+
+
+async def _create_organization(
+    bot: Bot,
+    session: AsyncSession,
+    *,
+    state: FSMContext,
+    permissions: Permissions,
+    chat_id: int,
+    contact_url: str | None,
+) -> None:
     data = await state.get_data()
+    if not data.get("name") or not data.get("review_chat_id"):
+        await state.clear()
+        return
     organization = await orgs_repo.create(
         session,
         name=data["name"],
@@ -228,7 +312,7 @@ async def on_org_contact(
         description=data.get("description", ""),
         review_chat_id=int(data["review_chat_id"]),
         review_thread_id=data.get("review_thread_id"),
-        contact_url=None if raw == "-" else raw,
+        contact_url=contact_url,
         is_active=True,
     )
     await audit_repo.log(
@@ -242,8 +326,8 @@ async def on_org_contact(
     )
     await session.commit()
     await state.clear()
-    await notifications.send_text(bot, message.chat.id, "Организация создана\\.")
-    await _show_org(bot, message.chat.id, session, organization)
+    await notifications.send_text(bot, chat_id, "Организация создана\\.")
+    await _show_org(bot, chat_id, session, organization)
 
 
 @router.callback_query(F.data.regexp(r"^adm:org_toggle:\d+$"))
@@ -300,15 +384,72 @@ async def on_org_set(
         "slug": "Введите новый slug (латиница, цифры, дефис):",
         "description": "Введите новое описание:",
         "chat": "Введите ID чата проверки:",
-        "thread": "Введите ID темы или «-»:",
-        "contact": "Введите контактную ссылку или «-»:",
+        "thread": "Введите ID темы или нажмите «Без темы»:",
+        "contact": "Введите контактную ссылку или нажмите «Без контакта»:",
     }
+    default_text = None
+    default_callback = None
+    if field == "thread":
+        default_text = "✅ Без темы"
+        default_callback = "orgwiz:edit_default"
+    elif field == "contact":
+        default_text = "✅ Без контакта"
+        default_callback = "orgwiz:edit_default"
     await notifications.send_text(
         bot,
         callback.message.chat.id,
         prompts.get(field, "Введите значение:"),
-        reply_markup=wizard_cancel(f"adm:org:{organization.id}"),
+        reply_markup=wizard_input(
+            f"adm:org:{organization.id}",
+            default_callback=default_callback,
+            default_text=default_text or "✅ По умолчанию",
+        ),
     )
+
+
+@router.callback_query(F.data == "orgwiz:edit_default")
+async def on_org_edit_default(
+    callback: CallbackQuery,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    state: FSMContext,
+) -> None:
+    if callback.message is None:
+        return
+    if not _guard(permissions):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    if await state.get_state() != OrganizationWizard.edit_value.state:
+        await callback.answer("Шаг уже неактуален", show_alert=True)
+        return
+    data = await state.get_data()
+    field = data.get("field")
+    if field not in {"thread", "contact"}:
+        await callback.answer("Для этого поля нет значения по умолчанию", show_alert=True)
+        return
+    organization = await orgs_repo.get(session, int(data.get("organization_id", 0)))
+    if organization is None:
+        await state.clear()
+        await callback.answer("Организация не найдена", show_alert=True)
+        return
+    if field == "thread":
+        organization.review_thread_id = None
+    else:
+        organization.contact_url = None
+    await audit_repo.log(
+        session,
+        entity_type="organization",
+        entity_id=organization.id,
+        actor_id=permissions.user_id,
+        action="organization_updated",
+        payload={"field": field, "value": None},
+        at=utcnow(),
+    )
+    await session.commit()
+    await state.clear()
+    await callback.answer("Очищено")
+    await _show_org(bot, callback.message.chat.id, session, organization)
 
 
 @router.message(OrganizationWizard.edit_value, F.text)

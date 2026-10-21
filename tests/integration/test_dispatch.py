@@ -245,3 +245,37 @@ async def test_dispatch_smoke(session_factory, env_settings):
     bot.answered.clear()
     await dp.feed_update(bot, _callback(500, "adm:menu", 16))
     assert any("нет доступа" in text for text in bot.answered)
+
+    # Admin wizard: one-tap defaults instead of typing "-".
+    bot.messages.clear()
+    await dp.feed_update(bot, _callback(100, "adm:raffle_new", 17))
+    for update_id, text in (
+        (18, "QoL raffle"),
+        (19, "Описание QoL"),
+        (20, "5"),
+    ):
+        await dp.feed_update(bot, _message(100, text, update_id))
+    await dp.feed_update(bot, _callback(100, "rw:default:min_amount", 21))
+    assert any("количество призов" in text for _, text, _ in bot.messages)
+    await dp.feed_update(bot, _message(100, "1", 22))
+    await dp.feed_update(bot, _message(100, "01.01.2027 10:00", 23))
+    await dp.feed_update(bot, _message(100, "01.02.2027 10:00", 24))
+    await dp.feed_update(bot, _callback(100, "rw:default:channel_url", 25))
+    assert any("название канала" in text for _, text, _ in bot.messages)
+    await dp.feed_update(bot, _callback(100, "rw:default:channel_title", 26))
+    assert any("Выберите организации" in text for _, text, _ in bot.messages)
+    await dp.feed_update(bot, _callback(100, "rw:cancel", 27))
+
+    # Organization wizard: skip topic and contact with buttons.
+    bot.messages.clear()
+    await dp.feed_update(bot, _callback(100, "adm:org_new", 28))
+    for update_id, text in (
+        (29, "QoL Organization"),
+        (30, "Описание"),
+        (31, "-1001234567890"),
+    ):
+        await dp.feed_update(bot, _message(100, text, update_id))
+    await dp.feed_update(bot, _callback(100, "orgwiz:default:thread", 32))
+    assert any("контактную ссылку" in text for _, text, _ in bot.messages)
+    await dp.feed_update(bot, _callback(100, "orgwiz:default:contact", 33))
+    assert any("Организация создана" in text for _, text, _ in bot.messages)

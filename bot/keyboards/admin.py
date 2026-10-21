@@ -673,3 +673,17 @@ def participants_list(entries: list[tuple[int, str]]) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton(text="🔎 Поиск участника", callback_data="adm:part_search")])
     rows.append([InlineKeyboardButton(text="⬅️ В меню", callback_data="adm:menu")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def wizard_input(
+    cancel_callback: str,
+    *,
+    default_callback: str | None = None,
+    default_text: str = "✅ По умолчанию",
+) -> InlineKeyboardMarkup:
+    """Keyboard for a text prompt with an optional one-tap default."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if default_callback is not None:
+        rows.append([InlineKeyboardButton(text=default_text, callback_data=default_callback)])
+    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data=cancel_callback)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)

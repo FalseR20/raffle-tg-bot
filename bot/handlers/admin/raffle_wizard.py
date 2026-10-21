@@ -25,7 +25,7 @@ from bot.handlers.admin.raffles import (
 from bot.keyboards.admin import (
     edit_organizations,
     raffle_edit_fields,
-    wizard_cancel,
+    wizard_input,
     wizard_organizations,
 )
 from bot.middlewares.admin import ManagersOnlyMiddleware
@@ -67,18 +67,61 @@ _PROMPTS = {
     "title": "Введите название розыгрыша:",
     "description": "Введите описание и правила (обычный текст):",
     "ticket_price": "Введите цену билета в BYN, например 5,00:",
-    "min_amount": "Введите минимальную сумму одной заявки или «-», чтобы взять цену билета:",
+    "min_amount": "Введите минимальную сумму одной заявки или нажмите «Равна цене билета»:",
     "prizes_count": "Введите количество призов (целое число):",
     "start_at": "Введите дату и время начала: ДД.ММ.ГГГГ ЧЧ:ММ",
     "end_at": "Введите дату и время окончания: ДД.ММ.ГГГГ ЧЧ:ММ",
-    "channel_url": "Введите ссылку на канал или «-», чтобы взять значение по умолчанию:",
-    "channel_title": "Введите название канала или «-», чтобы взять значение по умолчанию:",
+    "channel_url": "Введите ссылку на канал или нажмите «Взять из настроек»:",
+    "channel_title": "Введите название канала или нажмите «Взять из настроек»:",
 }
 
 
-async def _prompt(bot: Bot, chat_id: int, step: str, state: FSMContext) -> None:
+async def _prompt(
+    bot: Bot,
+    chat_id: int,
+    step: str,
+    state: FSMContext,
+    *,
+    default_callback: str | None = None,
+    default_text: str = "✅ По умолчанию",
+) -> None:
     await state.set_state(getattr(RaffleWizard, step))
-    await notifications.send_text(bot, chat_id, _PROMPTS[step], reply_markup=wizard_cancel())
+    await notifications.send_text(
+        bot,
+        chat_id,
+        _PROMPTS[step],
+        reply_markup=wizard_input(
+            "rw:cancel",
+            default_callback=default_callback,
+            default_text=default_text,
+        ),
+    )
+
+
+async def _start_organization_selection(
+    bot: Bot,
+    session: AsyncSession,
+    *,
+    chat_id: int,
+    state: FSMContext,
+    data: dict,
+) -> None:
+    organizations = await orgs_repo.list_all(session, only_active=True)
+    selected = [organization.id for organization in organizations]
+    await state.update_data(
+        channel_title=data["channel_title"],
+        selected_organizations=selected,
+    )
+    await state.set_state(RaffleWizard.organizations)
+    await notifications.send_text(
+        bot,
+        chat_id,
+        "Выберите организации для розыгрыша:",
+        reply_markup=wizard_organizations(
+            [(organization.id, organization.name) for organization in organizations],
+            set(selected),
+        ),
+    )
 
 
 @router.message(StateFilter(*WIZARD_INPUT_STEPS), F.text)
@@ -123,7 +166,14 @@ async def on_wizard_input(
             await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
             return
         await state.update_data(**data)
-        await _prompt(bot, message.chat.id, "min_amount", state)
+        await _prompt(
+            bot,
+            message.chat.id,
+            "min_amount",
+            state,
+            default_callback="rw:default:min_amount",
+            default_text="✅ Равна цене билета",
+        )
         return
     if step == "min_amount":
         try:
@@ -168,32 +218,114 @@ async def on_wizard_input(
             return
         data["end_at"] = end_at.isoformat()
         await state.update_data(**data)
-        await _prompt(bot, message.chat.id, "channel_url", state)
+        await _prompt(
+            bot,
+            message.chat.id,
+            "channel_url",
+            state,
+            default_callback="rw:default:channel_url",
+            default_text="✅ Взять из настроек",
+        )
         return
     if step == "channel_url":
         data["channel_url"] = runtime_settings.channel_url or "" if raw == "-" else raw
         await state.update_data(**data)
-        await _prompt(bot, message.chat.id, "channel_title", state)
+        await _prompt(
+            bot,
+            message.chat.id,
+            "channel_title",
+            state,
+            default_callback="rw:default:channel_title",
+            default_text="✅ Взять из настроек",
+        )
         return
     if step == "channel_title":
         data["channel_title"] = runtime_settings.channel_title or "" if raw == "-" else raw
-        organizations = await orgs_repo.list_all(session, only_active=True)
-        selected = [organization.id for organization in organizations]
-        await state.update_data(
-            channel_title=data["channel_title"],
-            selected_organizations=selected,
-        )
-        await state.set_state(RaffleWizard.organizations)
-        await notifications.send_text(
-            bot,
-            message.chat.id,
-            "Выберите организации для розыгрыша:",
-            reply_markup=wizard_organizations(
-                [(organization.id, organization.name) for organization in organizations],
-                set(selected),
-            ),
+        await _start_organization_selection(
+            bot, session, chat_id=message.chat.id, state=state, data=data
         )
         return
+
+
+async def _is_in_state(state: FSMContext, expected) -> bool:
+    return await state.get_state() == expected.state
+
+
+@router.callback_query(F.data == "rw:default:min_amount")
+async def on_default_min_amount(
+    callback: CallbackQuery,
+    bot: Bot,
+    permissions: Permissions,
+    state: FSMContext,
+) -> None:
+    if callback.message is None:
+        return
+    if not _guard(callback, permissions):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    if not await _is_in_state(state, RaffleWizard.min_amount):
+        await callback.answer("Шаг уже неактуален", show_alert=True)
+        return
+    data = await state.get_data()
+    data["min_amount"] = data["ticket_price"]
+    await state.update_data(**data)
+    await callback.answer("Минимальная сумма = цена билета")
+    await _prompt(bot, callback.message.chat.id, "prizes_count", state)
+
+
+@router.callback_query(F.data == "rw:default:channel_url")
+async def on_default_channel_url(
+    callback: CallbackQuery,
+    bot: Bot,
+    permissions: Permissions,
+    runtime_settings,
+    state: FSMContext,
+) -> None:
+    if callback.message is None:
+        return
+    if not _guard(callback, permissions):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    if not await _is_in_state(state, RaffleWizard.channel_url):
+        await callback.answer("Шаг уже неактуален", show_alert=True)
+        return
+    data = await state.get_data()
+    data["channel_url"] = runtime_settings.channel_url or ""
+    await state.update_data(**data)
+    await callback.answer("Взято из настроек")
+    await _prompt(
+        bot,
+        callback.message.chat.id,
+        "channel_title",
+        state,
+        default_callback="rw:default:channel_title",
+        default_text="✅ Взять из настроек",
+    )
+
+
+@router.callback_query(F.data == "rw:default:channel_title")
+async def on_default_channel_title(
+    callback: CallbackQuery,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    runtime_settings,
+    state: FSMContext,
+) -> None:
+    if callback.message is None:
+        return
+    if not _guard(callback, permissions):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    if not await _is_in_state(state, RaffleWizard.channel_title):
+        await callback.answer("Шаг уже неактуален", show_alert=True)
+        return
+    data = await state.get_data()
+    data["channel_title"] = runtime_settings.channel_title or ""
+    await callback.answer("Взято из настроек")
+    await _start_organization_selection(
+        bot, session, chat_id=callback.message.chat.id, state=state, data=data
+    )
 
 
 @router.callback_query(F.data.startswith("rw:org:"))

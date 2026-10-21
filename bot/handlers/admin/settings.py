@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.config import Settings
-from bot.keyboards.admin import settings_menu, wizard_cancel
+from bot.keyboards.admin import settings_menu, wizard_input
 from bot.middlewares.admin import ManagersOnlyMiddleware
 from bot.services import notifications
 from bot.services.errors import ServiceError
@@ -46,6 +46,13 @@ EDITABLE_KEYS = [
     "greeting_text",
 ]
 assert set(EDITABLE_KEYS) <= set(SETTING_KEYS)
+
+OPTIONAL_KEYS = {
+    "channel_url",
+    "support_contact",
+    "management_log_chat_id",
+    "greeting_text",
+}
 
 
 async def _send_settings(bot: Bot, chat_id: int, session: AsyncSession, env: Settings) -> None:
@@ -107,14 +114,56 @@ async def on_setting(
     hint = "Введите новое значение"
     if isinstance(current, bool):
         hint = "Введите «да» или «нет»"
+    default_callback = f"adm:setting_clear:{key}" if key in OPTIONAL_KEYS else None
+    if default_callback:
+        hint += " или нажмите «Очистить»"
     await notifications.send_text(
         bot,
         callback.message.chat.id,
         f"{escape_markdown_v2(setting_label(key))}\n\n"
         f"Текущее значение: {escape_markdown_v2(describe_setting(key, current))}\n\n"
         f"{hint}:",
-        reply_markup=wizard_cancel("adm:settings"),
+        reply_markup=wizard_input(
+            "adm:settings",
+            default_callback=default_callback,
+            default_text="✅ Очистить",
+        ),
     )
+
+
+@router.callback_query(F.data.startswith("adm:setting_clear:"))
+async def on_setting_clear(
+    callback: CallbackQuery,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    env_settings: Settings,
+    state: FSMContext,
+) -> None:
+    if callback.message is None or callback.data is None:
+        return
+    if not permissions.can_manage_raffles:
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    key = callback.data.split(":", 2)[2]
+    if key not in OPTIONAL_KEYS:
+        await callback.answer("Эту настройку нельзя очистить", show_alert=True)
+        return
+    try:
+        await update_setting(
+            session,
+            key=key,
+            raw="",
+            actor_id=permissions.user_id,
+            now=utcnow(),
+        )
+        await session.commit()
+    except ServiceError as exc:
+        await callback.answer(exc.user_message, show_alert=True)
+        return
+    await state.clear()
+    await callback.answer("Очищено")
+    await _send_settings(bot, callback.message.chat.id, session, env_settings)
 
 
 @router.message(SettingsWizard.value, F.text)
