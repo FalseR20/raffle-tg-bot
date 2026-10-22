@@ -27,7 +27,7 @@ echo "==> building bot image"
 "${COMPOSE[@]}" build bot
 
 echo "==> applying migrations"
-"${COMPOSE[@]}" run --rm --no-deps bot uv run alembic upgrade head
+"${COMPOSE[@]}" run --rm --no-deps bot alembic upgrade head
 
 echo "==> restarting bot"
 "${COMPOSE[@]}" up -d --no-build bot

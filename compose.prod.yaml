@@ -59,7 +59,7 @@ services:
         condition: service_healthy
       rustfs:
         condition: service_healthy
-    command: ["sh", "-c", "uv run alembic upgrade head && uv run python -m bot.main"]
+    command: ["sh", "-c", "alembic upgrade head && python -m bot.main"]
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${HEALTH_PORT:-8081}', timeout=3).read()\""]
       interval: 30s
