@@ -162,6 +162,17 @@ The bot container waits for both and then applies migrations. The bot exposes a 
 endpoint on `HEALTH_PORT` (default `8081`); it returns `200` when PostgreSQL and RustFS are
 reachable and `503` otherwise.
 
+## Production deployment
+
+Production runs on a shared VPS from `/opt/raffle-tg-bot` with
+`compose.prod.yaml`, which publishes no database or RustFS ports. Every push to
+`main` triggers the GitHub Actions workflow: quality gates, then an SSH deploy
+that fast-forwards the checkout, rebuilds the image, applies Alembic migrations
+and restarts the bot with `scripts/deploy.sh`.
+
+See [deploy/PRODUCTION.md](deploy/PRODUCTION.md) for the server layout, secrets
+and the one-time bootstrap.
+
 ## Backups
 
 `scripts/backup.sh` creates a compressed PostgreSQL dump and a RustFS data archive in
