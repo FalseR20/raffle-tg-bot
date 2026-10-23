@@ -430,10 +430,11 @@ async def on_delete_request(
             raffle.title, applications=applications, winners=winners
         )
     elif raffle.status is RaffleStatus.DRAFT:
-        prompt = f"Удалить черновик «{escape_markdown_v2(raffle.title)}»?"
+        applications = await raffles_repo.count_applications(session, raffle.id)
+        prompt = ru.draft_raffle_delete_prompt(raffle.title, applications=applications)
     else:
         await callback.answer(
-            "Удалять можно только черновик без заявок или архивный розыгрыш.",
+            "Удалять можно только черновик или архивный розыгрыш.",
             show_alert=True,
         )
         return
@@ -469,21 +470,26 @@ async def on_delete(
             deletion = await delete_archived(
                 session, actor=permissions, raffle=raffle, now=utcnow()
             )
-            # Commit before touching object storage. A later storage failure
-            # must not roll the raffle row back into place without its files,
-            # and a failed commit must not erase files that are still referenced.
-            await session.commit()
-            failed_receipts = await purge_archived_receipts(
-                session,
-                storage,
-                keys=deletion.receipt_object_keys,
-                raffle_id=deletion.raffle_id,
-                actor_id=permissions.user_id,
-                now=utcnow(),
-            )
+        elif raffle.status is RaffleStatus.DRAFT:
+            deletion = await delete_draft(session, actor=permissions, raffle=raffle, now=utcnow())
         else:
-            await delete_draft(session, actor=permissions, raffle=raffle, now=utcnow())
-            await session.commit()
+            await callback.answer(
+                "Удалять можно только черновик или архивный розыгрыш.",
+                show_alert=True,
+            )
+            return
+        # Commit before touching object storage. A later storage failure
+        # must not roll the raffle row back into place without its files,
+        # and a failed commit must not erase files that are still referenced.
+        await session.commit()
+        failed_receipts = await purge_archived_receipts(
+            session,
+            storage,
+            keys=deletion.receipt_object_keys,
+            raffle_id=deletion.raffle_id,
+            actor_id=permissions.user_id,
+            now=utcnow(),
+        )
     except ServiceError as exc:
         await session.rollback()
         await callback.answer(exc.user_message, show_alert=True)

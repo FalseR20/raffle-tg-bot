@@ -55,6 +55,13 @@ def test_finished_raffle_card_has_winners_button():
     assert "adm:winners:8" in archived_callbacks
     assert "adm:raffle_del:8" in archived_callbacks
 
+    draft_callbacks = [
+        button.callback_data
+        for row in raffle_card(9, RaffleStatus.DRAFT, can_manage=True).inline_keyboard
+        for button in row
+    ]
+    assert "adm:raffle_del:9" in draft_callbacks
+
 
 def test_main_menu_shows_shortcuts_to_non_archived_raffles():
     from bot.keyboards.admin import main_menu

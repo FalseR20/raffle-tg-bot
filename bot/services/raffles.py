@@ -67,13 +67,16 @@ class FinishResult:
 
 
 @dataclass(frozen=True)
-class ArchivedRaffleDeletion:
-    """Identity of a removed archive. Receipt keys are deleted after commit."""
+class RaffleDeletion:
+    """Identity of a removed raffle. Receipt keys are deleted after commit."""
 
     raffle_id: int
     title: str
     slug: str
     receipt_object_keys: tuple[str, ...]
+
+
+ArchivedRaffleDeletion = RaffleDeletion
 
 
 def _assert_manage(actor: Permissions) -> None:
@@ -531,25 +534,16 @@ async def return_to_draft(
 
 async def delete_draft(
     session: AsyncSession, *, actor: Permissions, raffle: Raffle, now: datetime
-) -> None:
-    _assert_manage(actor)
-    if raffle.status is not RaffleStatus.DRAFT:
-        raise InvalidStateError("Удалять можно только черновик.")
-    if await raffles_repo.count_applications(session, raffle.id):
-        raise InvalidStateError("Нельзя удалить черновик с заявками.")
-    await audit_repo.log(
+) -> RaffleDeletion:
+    """Delete a draft raffle, including its applications and receipt keys."""
+    return await _delete_raffle(
         session,
-        entity_type="raffle",
-        entity_id=raffle.id,
-        raffle_id=raffle.id,
-        actor_id=actor.user_id,
-        action="raffle_deleted",
-        old_status=raffle.status.value,
-        payload={"title": raffle.title},
-        at=now,
+        actor=actor,
+        raffle=raffle,
+        now=now,
+        allowed_status=RaffleStatus.DRAFT,
+        rejected_message="Удалять можно только черновик.",
     )
-    await session.delete(raffle)
-    await session.flush()
 
 
 def _expunge_deleted_raffle(session: AsyncSession, raffle_id: int) -> None:
@@ -569,8 +563,28 @@ def _expunge_deleted_raffle(session: AsyncSession, raffle_id: int) -> None:
 
 async def delete_archived(
     session: AsyncSession, *, actor: Permissions, raffle: Raffle, now: datetime
-) -> ArchivedRaffleDeletion:
-    """Delete an archived raffle and its dependent rows.
+) -> RaffleDeletion:
+    """Delete an archived raffle and its dependent rows."""
+    return await _delete_raffle(
+        session,
+        actor=actor,
+        raffle=raffle,
+        now=now,
+        allowed_status=RaffleStatus.ARCHIVED,
+        rejected_message="Удалять можно только архивный розыгрыш.",
+    )
+
+
+async def _delete_raffle(
+    session: AsyncSession,
+    *,
+    actor: Permissions,
+    raffle: Raffle,
+    now: datetime,
+    allowed_status: RaffleStatus,
+    rejected_message: str,
+) -> RaffleDeletion:
+    """Delete a raffle and its dependent rows.
 
     The caller commits this transaction before deleting receipt objects. Users,
     organizations and the audit log are kept. Receipt keys are returned so the
@@ -580,12 +594,13 @@ async def delete_archived(
     locked = await raffles_repo.lock(session, raffle.id)
     if locked is None:
         raise NotFoundError("Розыгрыш не найден.")
-    if locked.status is not RaffleStatus.ARCHIVED:
-        raise InvalidStateError("Удалять можно только архивный розыгрыш.")
+    if locked.status is not allowed_status:
+        raise InvalidStateError(rejected_message)
 
     raffle_id = locked.id
     title = locked.title
     slug = locked.slug
+    old_status = locked.status.value
     last_ticket_number = locked.last_ticket_number
 
     await session.execute(
@@ -618,7 +633,7 @@ async def delete_archived(
             raffle_id=raffle_id,
             actor_id=actor.user_id,
             action="raffle_deleted",
-            old_status=RaffleStatus.ARCHIVED.value,
+            old_status=old_status,
             payload={
                 "title": title,
                 "slug": slug,
@@ -635,7 +650,7 @@ async def delete_archived(
         raise InvalidStateError("Не удалось удалить розыгрыш. Попробуйте ещё раз.") from exc
 
     _expunge_deleted_raffle(session, raffle_id)
-    return ArchivedRaffleDeletion(
+    return RaffleDeletion(
         raffle_id=raffle_id,
         title=title,
         slug=slug,
@@ -652,7 +667,7 @@ async def purge_archived_receipts(
     actor_id: int | None,
     now: datetime,
 ) -> tuple[str, ...]:
-    """Delete receipt objects after the archive row has been committed.
+    """Delete receipt objects after the raffle row has been committed.
 
     Returns keys that could not be removed. Those failures are written to the
     audit log and do not restore the raffle.

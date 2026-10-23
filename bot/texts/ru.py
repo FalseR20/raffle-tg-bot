@@ -46,6 +46,18 @@ def winners_label(number: int) -> str:
     return f"{number} {plural_ru(number, 'победитель', 'победителя', 'победителей')}"
 
 
+def draft_raffle_delete_prompt(title: str, *, applications: int) -> str:
+    """Confirmation before a draft raffle and its receipts are removed."""
+    if applications:
+        details = (
+            f"Вместе с ним будут удалены {esc(applications_label(applications))} "
+            "и файлы чеков\\. Организации и журнал аудита сохранятся\\."
+        )
+    else:
+        details = "Заявок в этом черновике нет\\. Журнал аудита сохранится\\."
+    return f"Удалить черновик «{esc(title)}»\\?\n\n{details}\n\nЭто действие нельзя отменить\\."
+
+
 def archived_raffle_delete_prompt(title: str, *, applications: int, winners: int) -> str:
     """Confirmation before an archived raffle and its receipts are removed."""
     return (

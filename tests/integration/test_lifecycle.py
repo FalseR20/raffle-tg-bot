@@ -36,6 +36,7 @@ from bot.services.raffles import (
     RaffleInput,
     activate,
     delete_archived,
+    delete_draft,
     duplicate,
     finish,
     process_schedule,
@@ -488,6 +489,106 @@ async def test_only_archived_raffle_can_be_deleted_by_a_manager(session_factory)
     async with session_factory() as session:
         assert await session.get(Raffle, archived_id) is None
         assert await session.get(Raffle, finished_id) is not None
+
+
+async def test_draft_raffle_deletion_removes_applications_and_receipts(session_factory):
+    async with session_scope(session_factory) as session:
+        user = await make_user(session, 500)
+        org = await make_organization(session)
+        draft = await make_raffle(
+            session, organizations=[org], title="Draft me", status=RaffleStatus.DRAFT
+        )
+        kept = await make_raffle(
+            session, organizations=[org], title="Keep draft", status=RaffleStatus.DRAFT
+        )
+        with_receipt = await make_application(
+            session,
+            raffle=draft,
+            user=user,
+            organization=org,
+            amount=Decimal("5"),
+            status=ApplicationStatus.AWAITING_RECEIPT,
+        )
+        with_receipt.receipt_object_key = "receipts/draft/one.pdf"
+        empty = await make_application(
+            session,
+            raffle=draft,
+            user=await make_user(session, 501),
+            organization=org,
+            amount=Decimal("10"),
+            status=ApplicationStatus.DRAFT,
+            with_receipt=False,
+        )
+        kept_app = await make_application(
+            session,
+            raffle=kept,
+            user=user,
+            organization=org,
+            amount=Decimal("7"),
+            status=ApplicationStatus.DRAFT,
+            with_receipt=False,
+        )
+        draft_id = draft.id
+        kept_id = kept.id
+        kept_app_id = kept_app.id
+        with_receipt_id = with_receipt.id
+        empty_id = empty.id
+        user_id = user.id
+        org_id = org.id
+        await audit_repo.log(
+            session,
+            entity_type="application",
+            entity_id=with_receipt.id,
+            application_id=with_receipt.id,
+            raffle_id=draft.id,
+            actor_id=ADMIN.user_id,
+            action="application_draft_started",
+        )
+
+    async with session_scope(session_factory) as session:
+        raffle = await session.get(Raffle, draft_id)
+        org = await session.get(Organization, org_id)
+        assert raffle is not None
+        assert org is not None
+        active = await make_raffle(session, organizations=[org], title="Still active")
+        with pytest.raises(InvalidStateError):
+            await delete_draft(session, actor=ADMIN, raffle=active, now=datetime.now(UTC))
+        with pytest.raises(PermissionDeniedError):
+            await delete_draft(session, actor=ORG_REP, raffle=raffle, now=datetime.now(UTC))
+        deletion = await delete_draft(
+            session, actor=ORGANIZER, raffle=raffle, now=datetime.now(UTC)
+        )
+        assert deletion.raffle_id == draft_id
+        assert deletion.receipt_object_keys == ("receipts/draft/one.pdf",)
+
+    async with session_factory() as session:
+        assert await session.get(Raffle, draft_id) is None
+        assert await session.get(Application, with_receipt_id) is None
+        assert await session.get(Application, empty_id) is None
+        assert await session.get(ParticipantTotal, (draft_id, user_id)) is None
+        assert await session.get(Raffle, kept_id) is not None
+        assert (await session.get(Application, kept_app_id)).raffle_id == kept_id
+        assert await session.get(Organization, org_id) is not None
+        assert await session.get(User, user_id) is not None
+        deleted_audit = (
+            await session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "raffle_deleted",
+                    AuditLog.entity_id == str(draft_id),
+                )
+            )
+        ).scalar_one()
+        assert deleted_audit.raffle_id is None
+        assert deleted_audit.old_status == RaffleStatus.DRAFT.value
+        assert deleted_audit.payload["applications"] == 2
+        assert deleted_audit.payload["receipt_object_keys"] == ["receipts/draft/one.pdf"]
+        prior = (
+            await session.execute(
+                select(AuditLog).where(AuditLog.action == "application_draft_started")
+            )
+        ).scalar_one()
+        assert prior.application_id is None
+        assert prior.raffle_id is None
 
 
 async def test_failed_receipt_purge_is_audited_without_restoring_raffle(session_factory):

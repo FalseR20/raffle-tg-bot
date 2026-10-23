@@ -139,6 +139,8 @@ TEXTS = [
         winners=[(1, 3), (2, 5)],
         user_winning_places=[(1, 3)],
     ),
+    ru.draft_raffle_delete_prompt(HOSTILE, applications=0),
+    ru.draft_raffle_delete_prompt(HOSTILE, applications=2),
     ru.archived_raffle_delete_prompt(HOSTILE, applications=1, winners=5),
     ru.application_line(
         public_id="A-2026-000123",
@@ -197,6 +199,16 @@ def test_admin_wizard_default_buttons_show_values():
     assert _min_default_text(settings, Decimal("15")) == "✅ 15 BYN"
     assert _channel_url_default_text(settings) == "✅ https://t.me/charity"
     assert _channel_title_default_text(settings) == "✅ Благотворительный канал"
+
+
+def test_draft_delete_prompt_mentions_applications_when_present():
+    empty = ru.draft_raffle_delete_prompt("Весна", applications=0)
+    few = ru.draft_raffle_delete_prompt("Весна", applications=2)
+    assert "Заявок в этом черновике нет" in empty
+    assert "2 заявки" in few
+    assert "файлы чеков" in few
+    validate_markdown_v2(empty)
+    validate_markdown_v2(few)
 
 
 def test_archived_delete_prompt_uses_russian_plurals():

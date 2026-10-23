@@ -938,9 +938,9 @@ Publication of personal data requires separate consent. Default publication is t
 - Card: title, price, minimum, prize count, dates, organizations, status, applications, confirmed amount, issued tickets.
 - Create/edit wizard.
 - Duplicate.
-- Delete a draft without applications, or delete an archived raffle. Admin or organizer.
-  Deleting an archive removes its applications, winners, participant totals, organization
-  links and receipt objects. Users, organizations and the audit log remain. Confirm first.
+- Delete a draft or an archived raffle. Admin or organizer, after confirmation.
+  Deletion removes applications, winners, participant totals, organization links and
+  receipt objects. Users, organizations and the audit log remain.
 - Start, stop, resume, finish, archive.
 - Confirm dangerous actions.
 - Finish/archive allowed to admin and organizer.
