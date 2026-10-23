@@ -186,7 +186,7 @@ def raffle_card(
                     )
                 ]
             )
-        if status is RaffleStatus.DRAFT:
+        if status in {RaffleStatus.DRAFT, RaffleStatus.ARCHIVED}:
             rows.append(
                 [
                     InlineKeyboardButton(

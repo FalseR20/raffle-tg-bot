@@ -45,6 +45,7 @@ def test_finished_raffle_card_has_winners_button():
         for button in row
     ]
     assert "adm:winners:7" in callbacks
+    assert "adm:raffle_del:7" not in callbacks
 
     archived_callbacks = [
         button.callback_data
@@ -52,6 +53,7 @@ def test_finished_raffle_card_has_winners_button():
         for button in row
     ]
     assert "adm:winners:8" in archived_callbacks
+    assert "adm:raffle_del:8" in archived_callbacks
 
 
 def test_main_menu_shows_shortcuts_to_non_archived_raffles():

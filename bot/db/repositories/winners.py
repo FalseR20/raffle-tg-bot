@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from bot.db.models import Winner
+
+
+async def count_for_raffle(session: AsyncSession, raffle_id: int) -> int:
+    stmt = select(func.count()).select_from(Winner).where(Winner.raffle_id == raffle_id)
+    return int((await session.execute(stmt)).scalar_one())
 
 
 async def list_for_raffle(session: AsyncSession, raffle_id: int) -> list[Winner]:

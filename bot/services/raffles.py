@@ -6,15 +6,17 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.enums import ApplicationStatus, RaffleStatus
-from bot.db.models import Application, Organization, Raffle
+from bot.db.models import Application, AuditLog, Organization, Raffle, Winner
 from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import organizations as orgs_repo
 from bot.db.repositories import raffles as raffles_repo
+from bot.logging import get_logger
 from bot.services.errors import (
     InvalidStateError,
     NotFoundError,
@@ -22,8 +24,11 @@ from bot.services.errors import (
     ValidationError,
 )
 from bot.services.permissions import Permissions
+from bot.services.storage import ReceiptStorage
 from bot.utils.slug import slugify, unique_slug
 from bot.utils.url import normalize_optional_http_url
+
+logger = get_logger(__name__)
 
 OPEN_REVIEW_STATUSES = (ApplicationStatus.PENDING_REVIEW, ApplicationStatus.REVISION_REQUESTED)
 UNFINISHED_STATUSES = (
@@ -59,6 +64,16 @@ class FinishResult:
     @property
     def expired_count(self) -> int:
         return len(self.expired_applications)
+
+
+@dataclass(frozen=True)
+class ArchivedRaffleDeletion:
+    """Identity of a removed archive. Receipt keys are deleted after commit."""
+
+    raffle_id: int
+    title: str
+    slug: str
+    receipt_object_keys: tuple[str, ...]
 
 
 def _assert_manage(actor: Permissions) -> None:
@@ -535,6 +550,136 @@ async def delete_draft(
     )
     await session.delete(raffle)
     await session.flush()
+
+
+def _expunge_deleted_raffle(session: AsyncSession, raffle_id: int) -> None:
+    """Drop ORM instances whose rows were removed in this transaction.
+
+    The audit row stays: its foreign keys are cleared by the database, and the
+    in-memory entry is the record of the deletion.
+    """
+    for obj in list(session.identity_map.values()):
+        if isinstance(obj, AuditLog):
+            continue
+        owns_raffle = isinstance(obj, Raffle) and obj.id == raffle_id
+        belongs_to_raffle = getattr(obj, "raffle_id", None) == raffle_id
+        if owns_raffle or belongs_to_raffle:
+            session.expunge(obj)
+
+
+async def delete_archived(
+    session: AsyncSession, *, actor: Permissions, raffle: Raffle, now: datetime
+) -> ArchivedRaffleDeletion:
+    """Delete an archived raffle and its dependent rows.
+
+    The caller commits this transaction before deleting receipt objects. Users,
+    organizations and the audit log are kept. Receipt keys are returned so the
+    caller can remove the files after a successful commit.
+    """
+    _assert_manage(actor)
+    locked = await raffles_repo.lock(session, raffle.id)
+    if locked is None:
+        raise NotFoundError("Розыгрыш не найден.")
+    if locked.status is not RaffleStatus.ARCHIVED:
+        raise InvalidStateError("Удалять можно только архивный розыгрыш.")
+
+    raffle_id = locked.id
+    title = locked.title
+    slug = locked.slug
+    last_ticket_number = locked.last_ticket_number
+
+    await session.execute(
+        select(Application.id).where(Application.raffle_id == raffle_id).with_for_update()
+    )
+    await session.execute(select(Winner.id).where(Winner.raffle_id == raffle_id).with_for_update())
+    key_rows = await session.execute(
+        select(Application.receipt_object_key).where(
+            Application.raffle_id == raffle_id,
+            Application.receipt_object_key.is_not(None),
+        )
+    )
+    receipt_keys = tuple(key for key in key_rows.scalars().all() if key)
+    applications = await raffles_repo.count_applications(session, raffle_id)
+    winners = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(Winner).where(Winner.raffle_id == raffle_id)
+            )
+        ).scalar_one()
+    )
+
+    try:
+        await session.execute(delete(Winner).where(Winner.raffle_id == raffle_id))
+        await session.execute(delete(Application).where(Application.raffle_id == raffle_id))
+        await audit_repo.log(
+            session,
+            entity_type="raffle",
+            entity_id=raffle_id,
+            raffle_id=raffle_id,
+            actor_id=actor.user_id,
+            action="raffle_deleted",
+            old_status=RaffleStatus.ARCHIVED.value,
+            payload={
+                "title": title,
+                "slug": slug,
+                "raffle_id": raffle_id,
+                "applications": applications,
+                "winners": winners,
+                "last_ticket_number": last_ticket_number,
+                "receipt_object_keys": list(receipt_keys),
+            },
+            at=now,
+        )
+        await session.execute(delete(Raffle).where(Raffle.id == raffle_id))
+    except IntegrityError as exc:
+        raise InvalidStateError("Не удалось удалить розыгрыш. Попробуйте ещё раз.") from exc
+
+    _expunge_deleted_raffle(session, raffle_id)
+    return ArchivedRaffleDeletion(
+        raffle_id=raffle_id,
+        title=title,
+        slug=slug,
+        receipt_object_keys=receipt_keys,
+    )
+
+
+async def purge_archived_receipts(
+    session: AsyncSession,
+    storage: ReceiptStorage,
+    *,
+    keys: tuple[str, ...],
+    raffle_id: int,
+    actor_id: int | None,
+    now: datetime,
+) -> tuple[str, ...]:
+    """Delete receipt objects after the archive row has been committed.
+
+    Returns keys that could not be removed. Those failures are written to the
+    audit log and do not restore the raffle.
+    """
+    failed: list[str] = []
+    for key in keys:
+        try:
+            await storage.delete(key)
+        except Exception as exc:
+            logger.warning("Could not delete receipt object %s: %s", key, exc)
+            failed.append(key)
+    if failed:
+        await audit_repo.log(
+            session,
+            entity_type="raffle",
+            entity_id=raffle_id,
+            actor_id=actor_id,
+            action="receipt_delete_failed",
+            payload={
+                "raffle_id": raffle_id,
+                "object_keys": failed,
+                "reason": "raffle_deleted",
+                "error": "storage delete failed",
+            },
+            at=now,
+        )
+    return tuple(failed)
 
 
 async def duplicate(

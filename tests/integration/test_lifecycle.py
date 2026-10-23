@@ -6,20 +6,40 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import func, select
 
 from bot.db.enums import ApplicationStatus, RaffleStatus
+from bot.db.models import (
+    Application,
+    AuditLog,
+    Organization,
+    ParticipantTotal,
+    Raffle,
+    User,
+    Winner,
+)
+from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import raffles as raffles_repo
+from bot.db.repositories import winners as winners_repo
 from bot.db.session import session_scope
-from bot.services.errors import ExportError, InvalidStateError, ValidationError
+from bot.services.errors import (
+    ExportError,
+    InvalidStateError,
+    PermissionDeniedError,
+    StorageError,
+    ValidationError,
+)
 from bot.services.exports import build_tickets_pdf
 from bot.services.lifecycle import purge_cancelled_applications
 from bot.services.permissions import Permissions
 from bot.services.raffles import (
     RaffleInput,
     activate,
+    delete_archived,
     duplicate,
     finish,
     process_schedule,
+    purge_archived_receipts,
     stop_acceptance,
     validate_input,
 )
@@ -32,6 +52,8 @@ from tests.helpers import (
 
 pytestmark = pytest.mark.integration
 ADMIN = Permissions(user_id=100, is_admin=True)
+ORGANIZER = Permissions(user_id=200, is_organizer=True)
+ORG_REP = Permissions(user_id=300, org_rep_ids=frozenset({1}))
 
 
 class RecordingStorage:
@@ -288,6 +310,210 @@ async def test_stop_acceptance_then_finish_allowed(session_factory):
         assert raffle_row.status is RaffleStatus.CLOSED
     async with session_factory() as session:
         assert (await session.get(type(draft), draft.id)).status is ApplicationStatus.EXPIRED
+
+
+class _FlakyStorage:
+    def __init__(self, failing_key: str) -> None:
+        self.failing_key = failing_key
+        self.deleted: list[str] = []
+
+    async def delete(self, key: str) -> None:
+        if key == self.failing_key:
+            raise StorageError("Could not delete receipt: boom")
+        self.deleted.append(key)
+
+
+async def test_archived_raffle_deletion_removes_dependents_and_keeps_audit(session_factory):
+    async with session_scope(session_factory) as session:
+        user = await make_user(session, 500)
+        org = await make_organization(session)
+        archived = await make_raffle(
+            session,
+            organizations=[org],
+            title="Archive me",
+            status=RaffleStatus.ARCHIVED,
+            last_ticket_number=2,
+        )
+        archived.finished_at = datetime.now(UTC)
+        kept = await make_raffle(
+            session, organizations=[org], title="Keep me", status=RaffleStatus.ARCHIVED
+        )
+        confirmed = await make_application(
+            session, raffle=archived, user=user, organization=org, amount=Decimal("10")
+        )
+        confirmed.status = ApplicationStatus.CONFIRMED
+        confirmed.tickets_awarded = 2
+        confirmed.first_ticket_number = 1
+        confirmed.last_ticket_number = 2
+        confirmed.tickets_total_after = 2
+        confirmed.receipt_object_key = "receipts/archive/confirmed.pdf"
+        rejected = await make_application(
+            session,
+            raffle=archived,
+            user=user,
+            organization=org,
+            amount=Decimal("5"),
+            status=ApplicationStatus.REJECTED,
+        )
+        rejected.receipt_object_key = "receipts/archive/rejected.pdf"
+        await winners_repo.create(
+            session,
+            raffle_id=archived.id,
+            place=1,
+            ticket_number=1,
+            application_id=confirmed.id,
+        )
+        kept_app = await make_application(
+            session,
+            raffle=kept,
+            user=user,
+            organization=org,
+            amount=Decimal("7"),
+            status=ApplicationStatus.REJECTED,
+        )
+        await audit_repo.log(
+            session,
+            entity_type="application",
+            entity_id=confirmed.id,
+            application_id=confirmed.id,
+            raffle_id=archived.id,
+            actor_id=ADMIN.user_id,
+            action="application_confirmed",
+        )
+        archived_id = archived.id
+        kept_id = kept.id
+        kept_app_id = kept_app.id
+        org_id = org.id
+        user_id = user.id
+        confirmed_id = confirmed.id
+        rejected_id = rejected.id
+
+    async with session_scope(session_factory) as session:
+        raffle = await raffles_repo.get(session, archived_id)
+        assert raffle is not None
+        deletion = await delete_archived(
+            session, actor=ORGANIZER, raffle=raffle, now=datetime.now(UTC)
+        )
+        assert deletion.raffle_id == archived_id
+        assert set(deletion.receipt_object_keys) == {
+            "receipts/archive/confirmed.pdf",
+            "receipts/archive/rejected.pdf",
+        }
+
+    storage = RecordingStorage()
+    async with session_scope(session_factory) as session:
+        failed = await purge_archived_receipts(
+            session,
+            storage,
+            keys=deletion.receipt_object_keys,
+            raffle_id=archived_id,
+            actor_id=ORGANIZER.user_id,
+            now=datetime.now(UTC),
+        )
+        assert failed == ()
+    assert set(storage.deleted) == set(deletion.receipt_object_keys)
+
+    async with session_factory() as session:
+        assert await session.get(Raffle, archived_id) is None
+        assert await session.get(Application, confirmed_id) is None
+        assert await session.get(Application, rejected_id) is None
+        assert await session.get(ParticipantTotal, (archived_id, user_id)) is None
+        winner_count = await session.scalar(
+            select(func.count()).select_from(Winner).where(Winner.raffle_id == archived_id)
+        )
+        assert winner_count == 0
+        assert await session.get(Raffle, kept_id) is not None
+        assert (await session.get(Application, kept_app_id)).raffle_id == kept_id
+        assert await session.get(Organization, org_id) is not None
+        assert await session.get(User, user_id) is not None
+
+        deleted_audit = (
+            await session.execute(select(AuditLog).where(AuditLog.action == "raffle_deleted"))
+        ).scalar_one()
+        assert deleted_audit.raffle_id is None
+        assert deleted_audit.old_status == RaffleStatus.ARCHIVED.value
+        assert deleted_audit.actor_id == ORGANIZER.user_id
+        assert deleted_audit.payload["raffle_id"] == archived_id
+        assert deleted_audit.payload["title"] == "Archive me"
+        assert deleted_audit.payload["applications"] == 2
+        assert deleted_audit.payload["winners"] == 1
+        assert deleted_audit.payload["last_ticket_number"] == 2
+
+        prior = (
+            await session.execute(
+                select(AuditLog).where(AuditLog.action == "application_confirmed")
+            )
+        ).scalar_one()
+        assert prior.raffle_id is None
+        assert prior.application_id is None
+        assert prior.entity_id == str(confirmed_id)
+
+    async with session_scope(session_factory) as session:
+        org = await session.get(Organization, org_id)
+        assert org is not None
+        again = await make_raffle(
+            session, organizations=[org], title="Archive me", status=RaffleStatus.ARCHIVED
+        )
+        assert again.id != archived_id
+
+
+async def test_only_archived_raffle_can_be_deleted_by_a_manager(session_factory):
+    async with session_scope(session_factory) as session:
+        org = await make_organization(session)
+        finished = await make_raffle(
+            session, organizations=[org], title="Finished", status=RaffleStatus.FINISHED
+        )
+        archived = await make_raffle(
+            session, organizations=[org], title="Empty archive", status=RaffleStatus.ARCHIVED
+        )
+        finished_id = finished.id
+        archived_id = archived.id
+
+    async with session_scope(session_factory) as session:
+        finished = await session.get(Raffle, finished_id)
+        with pytest.raises(InvalidStateError):
+            await delete_archived(session, actor=ADMIN, raffle=finished, now=datetime.now(UTC))
+        archived = await session.get(Raffle, archived_id)
+        with pytest.raises(PermissionDeniedError):
+            await delete_archived(session, actor=ORG_REP, raffle=archived, now=datetime.now(UTC))
+
+    async with session_factory() as session:
+        assert await session.get(Raffle, finished_id) is not None
+        assert await session.get(Raffle, archived_id) is not None
+
+    async with session_scope(session_factory) as session:
+        archived = await session.get(Raffle, archived_id)
+        await delete_archived(session, actor=ADMIN, raffle=archived, now=datetime.now(UTC))
+
+    async with session_factory() as session:
+        assert await session.get(Raffle, archived_id) is None
+        assert await session.get(Raffle, finished_id) is not None
+
+
+async def test_failed_receipt_purge_is_audited_without_restoring_raffle(session_factory):
+    storage = _FlakyStorage("receipts/archive/missing.pdf")
+    async with session_scope(session_factory) as session:
+        failed = await purge_archived_receipts(
+            session,
+            storage,
+            keys=("receipts/archive/ok.pdf", "receipts/archive/missing.pdf"),
+            raffle_id=41,
+            actor_id=ADMIN.user_id,
+            now=datetime.now(UTC),
+        )
+        assert failed == ("receipts/archive/missing.pdf",)
+    assert storage.deleted == ["receipts/archive/ok.pdf"]
+
+    async with session_factory() as session:
+        entry = (
+            await session.execute(
+                select(AuditLog).where(AuditLog.action == "receipt_delete_failed")
+            )
+        ).scalar_one()
+        assert entry.raffle_id is None
+        assert entry.payload["raffle_id"] == 41
+        assert entry.payload["object_keys"] == ["receipts/archive/missing.pdf"]
+        assert entry.payload["reason"] == "raffle_deleted"
 
 
 async def test_activation_requires_active_payment_method(session_factory):

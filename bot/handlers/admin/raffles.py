@@ -12,6 +12,7 @@ from bot.db.models import Raffle
 from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import participants as participants_repo
 from bot.db.repositories import raffles as raffles_repo
+from bot.db.repositories import winners as winners_repo
 from bot.handlers.admin.common import parse_datetime
 from bot.keyboards.admin import (
     confirm_action,
@@ -27,14 +28,17 @@ from bot.services.permissions import Permissions
 from bot.services.raffles import (
     activate,
     archive,
+    delete_archived,
     delete_draft,
     duplicate,
     extend_end_at,
     finish,
+    purge_archived_receipts,
     resume,
     return_to_draft,
     stop_acceptance,
 )
+from bot.services.storage import ReceiptStorage
 from bot.states import RaffleWizard
 from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
@@ -419,11 +423,25 @@ async def on_delete_request(
     raffle = await _get_raffle(session, callback)
     if raffle is None:
         return
+    if raffle.status is RaffleStatus.ARCHIVED:
+        applications = await raffles_repo.count_applications(session, raffle.id)
+        winners = await winners_repo.count_for_raffle(session, raffle.id)
+        prompt = ru.archived_raffle_delete_prompt(
+            raffle.title, applications=applications, winners=winners
+        )
+    elif raffle.status is RaffleStatus.DRAFT:
+        prompt = f"Удалить черновик «{escape_markdown_v2(raffle.title)}»?"
+    else:
+        await callback.answer(
+            "Удалять можно только черновик без заявок или архивный розыгрыш.",
+            show_alert=True,
+        )
+        return
     await callback.answer()
     await notifications.send_text(
         bot,
         callback.message.chat.id,
-        f"Удалить черновик «{escape_markdown_v2(raffle.title)}»?",
+        prompt,
         reply_markup=confirm_action(
             "🗑 Да, удалить",
             f"adm:raffle_del_yes:{raffle.id}",
@@ -438,19 +456,45 @@ async def on_delete(
     bot: Bot,
     session: AsyncSession,
     permissions: Permissions,
+    storage: ReceiptStorage,
 ) -> None:
     if callback.message is None:
         return
     raffle = await _get_raffle(session, callback)
     if raffle is None:
         return
+    failed_receipts: tuple[str, ...] = ()
     try:
-        await delete_draft(session, actor=permissions, raffle=raffle, now=utcnow())
-        await session.commit()
+        if raffle.status is RaffleStatus.ARCHIVED:
+            deletion = await delete_archived(
+                session, actor=permissions, raffle=raffle, now=utcnow()
+            )
+            # Commit before touching object storage. A later storage failure
+            # must not roll the raffle row back into place without its files,
+            # and a failed commit must not erase files that are still referenced.
+            await session.commit()
+            failed_receipts = await purge_archived_receipts(
+                session,
+                storage,
+                keys=deletion.receipt_object_keys,
+                raffle_id=deletion.raffle_id,
+                actor_id=permissions.user_id,
+                now=utcnow(),
+            )
+        else:
+            await delete_draft(session, actor=permissions, raffle=raffle, now=utcnow())
+            await session.commit()
     except ServiceError as exc:
+        await session.rollback()
         await callback.answer(exc.user_message, show_alert=True)
         return
-    await callback.answer("Удалено")
+    if failed_receipts:
+        await callback.answer(
+            "Удалено. Часть чеков не удалось стереть — подробности в аудите.",
+            show_alert=True,
+        )
+    else:
+        await callback.answer("Удалено")
     await _send_raffles(bot, callback.message.chat.id, session, permissions)
 
 

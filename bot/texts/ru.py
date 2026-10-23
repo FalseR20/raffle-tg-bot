@@ -42,6 +42,21 @@ def applications_label(number: int) -> str:
     return f"{number} {plural_ru(number, 'заявка', 'заявки', 'заявок')}"
 
 
+def winners_label(number: int) -> str:
+    return f"{number} {plural_ru(number, 'победитель', 'победителя', 'победителей')}"
+
+
+def archived_raffle_delete_prompt(title: str, *, applications: int, winners: int) -> str:
+    """Confirmation before an archived raffle and its receipts are removed."""
+    return (
+        f"Удалить архивный розыгрыш «{esc(title)}»\\?\n\n"
+        f"Вместе с ним будут удалены {esc(applications_label(applications))}, "
+        f"{esc(winners_label(winners))} и файлы чеков\\. "
+        "Организации и журнал аудита сохранятся\\.\n\n"
+        "Это действие нельзя отменить\\."
+    )
+
+
 class HasRaffle(Protocol):
     title: str
     description: str

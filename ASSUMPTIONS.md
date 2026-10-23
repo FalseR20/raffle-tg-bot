@@ -117,7 +117,15 @@ the same handler/middleware path with a fake Telegram transport.
     organization set are locked after activation. With zero applications, the raffle can be
     returned to `draft` and reactivated. `end_at` may be extended until `finished`; extending a
     `closed` raffle with a future date returns it to `active`.
-40. **Delete** is allowed only for a `draft` with no applications.
+40. **Delete** is allowed for a `draft` with no applications, and for an `archived` raffle.
+    Archive deletion removes applications, winners, participant totals, raffle-organization
+    links and receipt objects. Users, organizations and the audit log stay. The deletion
+    audit keeps the raffle id, title, slug and receipt keys; older audit rows keep their
+    action and payload, with `raffle_id` and `application_id` set to NULL. Receipt objects
+    are removed only after the database commit. A failed object delete is audited and does
+    not restore the raffle. This is an explicit admin action and is separate from the
+    `RECEIPT_RETENTION_DAYS` cleanup, which keeps application rows. Participants are not
+    notified. `finished` and earlier statuses cannot be deleted.
 41. **Draft replacement.** A user has at most one draft per raffle. Starting a new donation
     offers Continue / Start over / Cancel. Cancellation is atomic and fails if a reviewer has
     already confirmed. A partial unique index on `(raffle_id, user_id)` for `draft` and
