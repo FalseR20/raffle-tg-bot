@@ -153,6 +153,11 @@ async def open_for_user(session: AsyncSession, raffle_id: int, user_id: int) -> 
     return list((await session.execute(stmt)).scalars())
 
 
+async def all_for_user(session: AsyncSession, user_id: int) -> list[Application]:
+    stmt = select(Application).where(Application.user_id == user_id).order_by(Application.id)
+    return list((await session.execute(stmt)).scalars().unique())
+
+
 async def for_user(session: AsyncSession, raffle_id: int, user_id: int) -> list[Application]:
     stmt = _with_relations(
         select(Application)

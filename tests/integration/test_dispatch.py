@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from bot.config import Settings
 from bot.db.enums import ApplicationStatus
-from bot.db.models import Application
+from bot.db.models import Application, User
 from bot.handlers import admin, common, my, participant, receipts, review
 from bot.middlewares.auth import AuthMiddleware
 from bot.middlewares.db import DbSessionMiddleware
@@ -180,6 +180,11 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
     await dp.feed_update(bot, _message(500, "/start", 1))
     assert bot.messages
     assert "Сейчас нет активного розыгрыша" in bot.messages[-1][1]
+    async with session_factory() as session:
+        created = await session.get(User, 500)
+        assert created is not None
+        assert created.username is None
+        assert created.first_name == ""
 
     async with session_factory() as session:
         org = await make_organization(session)
@@ -206,6 +211,11 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
 
     bot.messages.clear()
     await dp.feed_update(bot, _callback(500, "consent:accept", 6))
+    async with session_factory() as session:
+        consented = await session.get(User, 500)
+        assert consented is not None
+        assert consented.username == "u500"
+        assert consented.privacy_accepted_at is not None
     await dp.feed_update(bot, _callback(500, "publish:no", 7))
     assert any("Выберите организацию" in text for _, text, _ in bot.messages)
 

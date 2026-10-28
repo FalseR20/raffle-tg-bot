@@ -8,7 +8,13 @@ from bot.services.permissions import Permissions
 def test_bot_commands_are_aiogram_models():
     commands = bot_commands()
     assert all(isinstance(command, BotCommand) for command in commands)
-    assert [command.command for command in commands] == ["start", "my", "help", "admin"]
+    assert [command.command for command in commands] == [
+        "start",
+        "my",
+        "help",
+        "privacy",
+        "admin",
+    ]
     assert all(command.description for command in commands)
 
 

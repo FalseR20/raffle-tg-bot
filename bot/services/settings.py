@@ -28,6 +28,9 @@ SETTING_KEYS = (
     "privacy_url",
     "rules_version",
     "privacy_version",
+    "operator_name",
+    "operator_address",
+    "storage_country",
     "support_contact",
     "management_log_chat_id",
     "max_donation",
@@ -48,6 +51,9 @@ class RuntimeSettings:
     privacy_url: str
     rules_version: str
     privacy_version: str
+    operator_name: str | None
+    operator_address: str | None
+    storage_country: str | None
     support_contact: str | None
     management_log_chat_id: int | None
     max_donation: Decimal
@@ -74,6 +80,9 @@ def environment_defaults(env: Settings) -> RuntimeSettings:
         privacy_url=env.privacy_url,
         rules_version=env.rules_version,
         privacy_version=env.privacy_version,
+        operator_name=env.operator_name,
+        operator_address=env.operator_address,
+        storage_country=env.storage_country,
         support_contact=env.support_contact,
         management_log_chat_id=env.management_log_chat_id,
         max_donation=env.max_donation,
@@ -106,6 +115,15 @@ def parse_setting_value(key: str, raw: str | int | bool | None) -> Any:
             return normalize_optional_http_url(raw)
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
+
+    if key in {"operator_name", "operator_address", "storage_country"}:
+        if raw is None or (isinstance(raw, str) and not raw.strip()):
+            return None
+        text = str(raw).strip()
+        limits = {"operator_name": 200, "operator_address": 300, "storage_country": 80}
+        if len(text) > limits[key]:
+            raise ValidationError(f"Не длиннее {limits[key]} символов.")
+        return text
 
     if key in {"support_contact", "greeting_text"}:
         if raw is None or (isinstance(raw, str) and not raw.strip()):
@@ -218,6 +236,9 @@ def setting_label(key: str) -> str:
         "privacy_url": "Ссылка на политику конфиденциальности",
         "rules_version": "Версия правил",
         "privacy_version": "Версия политики",
+        "operator_name": "Имя оператора",
+        "operator_address": "Адрес оператора",
+        "storage_country": "Страна хранения данных",
         "support_contact": "Контакт поддержки",
         "management_log_chat_id": "Чат управления",
         "max_donation": "Максимальная сумма заявки",

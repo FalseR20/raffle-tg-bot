@@ -46,7 +46,11 @@ the same handler/middleware path with a fake Telegram transport.
     hashes. Opening a link first grants the role; the link is sensitive.
 14. **Consent.** Rules/privacy acceptance is required before organization buttons. A rules or
     privacy version change invalidates prior consent. Publication of a winner's name is opt-in;
-    the default is ticket number only.
+    the default is ticket number only. The privacy text lives in the bot (`/privacy`) and follows
+    the Belarus personal-data law (No. 99-Z): the pre-consent notice is separate from the full
+    policy, and name publication is a second consent. `OPERATOR_NAME` and `OPERATOR_ADDRESS`
+    must be set or the accept button is hidden. `PRIVACY_URL` stays as the public copy of the
+    same text. This draft is not a lawyer's opinion.
 15. **Age confirmation.** Controlled by `REQUIRE_AGE_CONFIRMATION` (default `false`). The spec
     mentions age confirmation as conditional but does not define the environment variable.
 16. **Draft TTL.** 24 hours from creation, checked by the scheduler. A draft that never reached
@@ -157,7 +161,10 @@ These do not block implementation; the safest defaults above are in use.
 3. Channel URL and whether subscription should ever be checked (currently a soft reminder only).
 4. Print ticket layout: tickets per A4, logos, QR codes, signatures, perforation.
 5. Expected load and deployment target; RustFS single-node vs cluster, TLS and backup policy.
-6. Privacy policy, rules URL, age restriction and legal review.
+6. A lawyer still needs to confirm the operator's status (natural person or individual
+   entrepreneur), the real name, address and hosting country, and the raffle rules. The in-bot
+   policy is a draft aligned with Law No. 99-Z and the National Personal Data Protection Centre
+   clarifications of 24 April 2025.
 7. Support contact and response expectations.
 8. Whether to add the receipt ZIP archive in MVP (currently out of scope).
 9. Whether winner recording and announcement generation belong in the bot (recording is
@@ -166,7 +173,9 @@ These do not block implementation; the safest defaults above are in use.
     safest default is to void and re-submit, but void is only for the last range).
 11. Whether an admin/organizer should be able to force-confirm a payment without a receipt.
 12. Exact retention period required by Belarusian accounting rules (`RECEIPT_RETENTION_DAYS`
-    defaults to 90; PostgreSQL metadata is retained indefinitely).
+    defaults to 90). On privacy withdrawal the nickname, name and receipt file are deleted
+    immediately; confirmed ticket numbers, the amount and the internal user id stay so the draw
+    can still be checked. Other profile rows are kept until withdrawal.
 
 ## Legal
 
@@ -177,3 +186,11 @@ and taxation. The bot does not publish results automatically.
 49. **Displayed amounts omit insignificant trailing zeros** (`5`, `15,5`) per product owner request. XLSX/CSV exports keep two decimals (`5.00`) for spreadsheet consistency.
 
 50. **User cancellation deletes the application.** Cancelling an unprocessed application removes its row instead of keeping a `cancelled` status. The audit log keeps `application_cancelled`, the public identifier and the old status with `application_id = NULL`; the review card is edited to "Cancelled" and the RustFS receipt object is removed.
+
+51. **Nicknames are stored only after privacy consent.** Opening the bot keeps the Telegram id
+    and does not store the username or name. Staff with a panel role are stored immediately
+    because they work in the bot. Withdrawal cancels unfinished applications, deletes receipt
+    objects and review-card messages when it can, and clears the nickname unless the person is
+    staff. Organization representatives are described as authorised persons under article 7;
+    the operator still has to instruct them outside the bot. The in-bot policy is the document
+    participants accept; bump `PRIVACY_VERSION` when its text changes.

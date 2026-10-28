@@ -61,6 +61,7 @@ def bot_commands() -> list[BotCommand]:
         BotCommand(command="start", description="Участвовать в розыгрыше"),
         BotCommand(command="my", description="Мои заявки"),
         BotCommand(command="help", description="Помощь"),
+        BotCommand(command="privacy", description="Политика конфиденциальности"),
         BotCommand(command="admin", description="Админ-панель"),
     ]
 

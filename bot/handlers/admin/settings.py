@@ -35,6 +35,9 @@ EDITABLE_KEYS = [
     "privacy_url",
     "rules_version",
     "privacy_version",
+    "operator_name",
+    "operator_address",
+    "storage_country",
     "support_contact",
     "management_log_chat_id",
     "max_donation",
@@ -50,8 +53,22 @@ assert set(EDITABLE_KEYS) <= set(SETTING_KEYS)
 OPTIONAL_KEYS = {
     "channel_url",
     "support_contact",
+    "operator_name",
+    "operator_address",
+    "storage_country",
     "management_log_chat_id",
     "greeting_text",
+}
+
+SETTING_HINTS = {
+    "operator_name": (
+        "Фамилия, имя и отчество или название. Без этого участник не сможет дать согласие."
+    ),
+    "operator_address": "Адрес для обращений по персональным данным. Его требует закон.",
+    "storage_country": "Страна серверов базы и чеков. Если они в Беларуси, напишите: Беларусь.",
+    "privacy_version": (
+        "Увеличьте версию после правки текста политики: бот попросит согласие заново."
+    ),
 }
 
 
@@ -111,7 +128,7 @@ async def on_setting(
     await state.set_state(SettingsWizard.value)
     await state.update_data(setting_key=key)
     await callback.answer()
-    hint = "Введите новое значение"
+    hint = SETTING_HINTS.get(key, "Введите новое значение")
     if isinstance(current, bool):
         hint = "Введите «да» или «нет»"
     default_callback = f"adm:setting_clear:{key}" if key in OPTIONAL_KEYS else None
