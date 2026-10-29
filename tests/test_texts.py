@@ -5,8 +5,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from bot.texts import ru
-from bot.texts.markdown import safe_markdown, validate_markdown_v2
+from bot.texts import privacy, ru
+from bot.texts.markdown import MESSAGE_LIMIT, safe_markdown, validate_markdown_v2
 
 TZ = ZoneInfo("Europe/Minsk")
 HOSTILE = 'Org "A" [x](y). ! _*~`'
@@ -27,14 +27,38 @@ def raffle():
     )
 
 
+def _privacy_facts(**overrides):
+    values = {
+        "operator_name": "Иван_Петров [тест] (тест).",
+        "operator_address": "г. Минск, ул. Примерная, д. 1",
+        "storage_country": "Беларусь",
+        "support_contact": "@support",
+        "rules_url": "https://example.org/rules?x=1&y=2",
+        "privacy_url": "https://example.org/privacy",
+        "rules_version": "1.0",
+        "privacy_version": "2.0",
+        "receipt_retention_days": 90,
+        "require_age_confirmation": True,
+        "channel_title": 'Канал "Тест"',
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
 TEXTS = [
-    ru.consent_text(
-        rules_url="https://example.org/rules?x=1&y=2",
-        privacy_url="https://example.org/privacy",
-        age_required=True,
-        rules_version="1.0",
-        privacy_version="2.0",
+    privacy.processing_notice(_privacy_facts()),
+    privacy.rights_notice(_privacy_facts()),
+    privacy.operator_missing_notice(),
+    privacy.withdrawal_prompt(),
+    privacy.withdrawal_done(failed=0),
+    privacy.withdrawal_done(failed=2),
+    privacy.withdrawal_done(failed=0, profile_cleared=False),
+    privacy.withdrawal_kept(),
+    *privacy.policy_pages(_privacy_facts()),
+    *privacy.policy_pages(
+        _privacy_facts(storage_country="Германия", operator_name=None, operator_address=None)
     ),
+    *privacy.policy_pages(_privacy_facts(storage_country=None)),
     ru.no_active_raffle_text('Канал "Тест"'),
     ru.scheduled_raffle_text(raffle(), TZ),
     ru.active_raffle_text(raffle(), TZ, has_consent=True),
@@ -224,6 +248,31 @@ def test_archived_delete_prompt_uses_russian_plurals():
     validate_markdown_v2(one)
     validate_markdown_v2(few)
     validate_markdown_v2(many)
+
+
+def test_privacy_policy_states_what_the_raffle_stores():
+    facts = _privacy_facts()
+    notice = privacy.processing_notice(facts)
+    rights = privacy.rights_notice(facts)
+    policy = "\n".join(privacy.policy_pages(facts))
+    for page in privacy.policy_pages(facts):
+        assert len(page) < MESSAGE_LIMIT
+    assert "Оператор: Иван\\_Петров" in notice
+    assert "ник" in notice
+    assert "скриншот" in notice
+    assert "Telegram" in notice
+    assert "примите правила розыгрыша" in rights
+    assert "Правила розыгрыша" in rights
+    assert "отозвать" in rights.lower() or "Отозвать" in rights or "отозвать" in rights
+    assert "99\\-З" in policy
+    assert "чек" in policy
+    assert "Беларуси" in policy
+    closed = privacy.operator_missing_notice()
+    assert "закрыто" in closed
+    foreign = "\n".join(privacy.policy_pages(_privacy_facts(storage_country="Германия")))
+    assert "Германия" in foreign
+    unknown = "\n".join(privacy.policy_pages(_privacy_facts(storage_country=None)))
+    assert "не указана" in unknown
 
 
 def test_ranges_and_pluralization_in_texts():

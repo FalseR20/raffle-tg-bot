@@ -24,27 +24,43 @@ async def upsert(
     last_name: str | None,
     language_code: str | None,
     seen_at: datetime,
+    update_profile: bool = True,
 ) -> User:
+    """Insert or refresh a user.
+
+    ``update_profile=False`` records only the technical id and last-seen time.
+    The nickname and name are stored later, after privacy consent.
+    """
+    profile = {
+        "username": username,
+        "first_name": first_name or "",
+        "last_name": last_name,
+        "language_code": language_code,
+    }
+    stored_profile = (
+        profile
+        if update_profile
+        else {
+            "username": None,
+            "first_name": "",
+            "last_name": None,
+            "language_code": None,
+        }
+    )
+    assignments = {"last_seen_at": seen_at}
+    if update_profile:
+        assignments.update(profile)
     stmt = (
         insert(User)
         .values(
             id=user_id,
-            username=username,
-            first_name=first_name or "",
-            last_name=last_name,
-            language_code=language_code,
             created_at=seen_at,
             last_seen_at=seen_at,
+            **stored_profile,
         )
         .on_conflict_do_update(
             index_elements=[User.id],
-            set_={
-                "username": username,
-                "first_name": first_name or "",
-                "last_name": last_name,
-                "language_code": language_code,
-                "last_seen_at": seen_at,
-            },
+            set_=assignments,
         )
         .returning(User.id)
     )
@@ -74,6 +90,14 @@ async def record_consent(
     if publish_name is not None:
         user.publish_name_consent_at = accepted_at if publish_name else None
     await session.flush()
+
+
+async def clear_profile(session: AsyncSession, user: User) -> User:
+    user.username = None
+    user.first_name = ""
+    user.last_name = None
+    await session.flush()
+    return user
 
 
 async def set_publish_name_consent(

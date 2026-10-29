@@ -63,7 +63,8 @@ The default compose mapping exposes PostgreSQL on `localhost:5433` and RustFS on
 - `DATABASE_URL` — must start with `postgresql+asyncpg://`.
 - `RUSTFS_*` — private bucket credentials and endpoint. Production must use TLS and unique
   credentials.
-- `RULES_URL`, `PRIVACY_URL` — required consent links.
+- `RULES_URL`, `PRIVACY_URL` — required consent links. The privacy policy itself is shown in the bot (`/privacy`) before consent; keep the public page identical to that text and raise `PRIVACY_VERSION` when it changes.
+- `OPERATOR_NAME`, `OPERATOR_ADDRESS` — who processes personal data. Participation stays closed until both are set. `STORAGE_COUNTRY` is where the database and receipts are stored (`Беларусь` if they stay in Belarus).
 
 The bot fails fast with a clear message if required settings are missing or invalid.
 

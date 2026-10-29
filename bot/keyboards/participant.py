@@ -5,17 +5,68 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def consent_keyboard(*, age_required: bool) -> InlineKeyboardMarkup:
+def consent_keyboard(*, age_required: bool, can_accept: bool) -> InlineKeyboardMarkup:
     rows = [
         [
             InlineKeyboardButton(
-                text="✅ Мне 18+" if age_required else "✅ Принимаю",
-                callback_data="consent:accept",
+                text="📄 Политика конфиденциальности",
+                callback_data="consent:policy",
             )
-        ],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="consent:cancel")],
+        ]
     ]
+    if can_accept:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Мне 18+" if age_required else "✅ Принимаю",
+                    callback_data="consent:accept",
+                )
+            ]
+        )
+        rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="consent:cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def policy_keyboard(
+    *,
+    can_accept: bool,
+    age_required: bool,
+    has_publish_consent: bool,
+) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    if can_accept:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Мне 18+" if age_required else "✅ Принимаю",
+                    callback_data="consent:accept",
+                )
+            ]
+        )
+    rows.append(
+        [InlineKeyboardButton(text="↩️ Отозвать согласие", callback_data="consent:withdraw")]
+    )
+    if has_publish_consent:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Не публиковать имя",
+                    callback_data="publish:no",
+                )
+            ]
+        )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def withdraw_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Да, отозвать", callback_data="consent:withdraw_yes"),
+                InlineKeyboardButton(text="Нет", callback_data="consent:withdraw_no"),
+            ]
+        ]
+    )
 
 
 def publish_consent_keyboard() -> InlineKeyboardMarkup:

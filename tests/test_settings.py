@@ -26,6 +26,9 @@ from bot.services.settings import (
         ("management_log_chat_id", "-100123", -100123),
         ("channel_url", "", None),
         ("channel_url", "https://t.me/x", "https://t.me/x"),
+        ("operator_name", "  Иван Петров  ", "Иван Петров"),
+        ("operator_address", "", None),
+        ("storage_country", "Беларусь", "Беларусь"),
     ],
 )
 def test_parse_setting_values(key, raw, expected):
@@ -40,6 +43,7 @@ def test_parse_setting_values(key, raw, expected):
         ("confirm_two_step", "maybe"),
         ("timezone", "Mars/Olympus"),
         ("rules_url", "ftp://example.org"),
+        ("operator_name", "x" * 201),
         ("channel_url", "not-a-url"),
         ("channel_url", "https://example.org/a b"),
         ("management_log_chat_id", "abc"),

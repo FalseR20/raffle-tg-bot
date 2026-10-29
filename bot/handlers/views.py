@@ -19,12 +19,76 @@ from bot.keyboards.participant import (
     consent_keyboard,
     draft_keyboard,
     organizations_keyboard,
+    policy_keyboard,
 )
 from bot.services import notifications
 from bot.services.raffles import close_due
 from bot.services.settings import RuntimeSettings
-from bot.services.users import has_valid_consent
-from bot.texts import ru
+from bot.services.users import has_valid_consent, operator_is_identified
+from bot.texts import privacy, ru
+
+
+async def send_consent(
+    bot: Bot,
+    chat_id: int,
+    settings: RuntimeSettings,
+    *,
+    message_thread_id: int | None = None,
+) -> None:
+    """Show the legal notice before the consent button."""
+    identified = operator_is_identified(settings)
+    if not identified:
+        await notifications.send_text(
+            bot,
+            chat_id,
+            privacy.operator_missing_notice(),
+            reply_markup=consent_keyboard(
+                age_required=settings.require_age_confirmation,
+                can_accept=False,
+            ),
+            message_thread_id=message_thread_id,
+        )
+        return
+    await notifications.send_text(
+        bot,
+        chat_id,
+        privacy.processing_notice(settings),
+        message_thread_id=message_thread_id,
+    )
+    await notifications.send_text(
+        bot,
+        chat_id,
+        privacy.rights_notice(settings),
+        reply_markup=consent_keyboard(
+            age_required=settings.require_age_confirmation,
+            can_accept=True,
+        ),
+        message_thread_id=message_thread_id,
+    )
+
+
+async def send_policy(
+    bot: Bot,
+    chat_id: int,
+    settings: RuntimeSettings,
+    user: User,
+    *,
+    message_thread_id: int | None = None,
+) -> None:
+    pages = privacy.policy_pages(settings)
+    markup = policy_keyboard(
+        can_accept=operator_is_identified(settings) and not has_valid_consent(user, settings),
+        age_required=settings.require_age_confirmation,
+        has_publish_consent=user.publish_name_consent_at is not None,
+    )
+    for index, page in enumerate(pages):
+        await notifications.send_text(
+            bot,
+            chat_id,
+            page,
+            reply_markup=markup if index == len(pages) - 1 else None,
+            message_thread_id=message_thread_id,
+        )
 
 
 def raffle_channel(raffle: Raffle, settings: RuntimeSettings) -> tuple[str | None, str | None]:
@@ -126,19 +190,7 @@ async def send_start_screen(
 
     consent = has_valid_consent(user, settings)
     if not consent:
-        await notifications.send_text(
-            bot,
-            chat_id,
-            ru.consent_text(
-                rules_url=settings.rules_url,
-                privacy_url=settings.privacy_url,
-                age_required=settings.require_age_confirmation,
-                rules_version=settings.rules_version,
-                privacy_version=settings.privacy_version,
-            ),
-            reply_markup=consent_keyboard(age_required=settings.require_age_confirmation),
-            message_thread_id=message_thread_id,
-        )
+        await send_consent(bot, chat_id, settings, message_thread_id=message_thread_id)
         return
 
     draft = await apps_repo.latest_draft(session, raffle.id, user.id)

@@ -36,21 +36,25 @@ class AuthMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         now = utcnow()
-        user = await users_service.touch_user(
-            session,
-            users_service.TelegramProfile(
-                user_id=tg_user.id,
-                username=tg_user.username,
-                first_name=tg_user.first_name,
-                last_name=tg_user.last_name,
-                language_code=tg_user.language_code,
-            ),
-            now=now,
+        profile = users_service.TelegramProfile(
+            user_id=tg_user.id,
+            username=tg_user.username,
+            first_name=tg_user.first_name,
+            last_name=tg_user.last_name,
+            language_code=tg_user.language_code,
         )
+        user = await users_service.touch_user(session, profile, now=now)
         permissions = await load_permissions(
             session, tg_user.id, env_admin_ids=self.env.admin_id_set
         )
         runtime_settings = await load_runtime_settings(session, self.env)
+        # The nickname is stored only after privacy consent, or for staff who
+        # already work in the bot. A stale policy version still keeps the name
+        # until the person withdraws or accepts the new text.
+        if permissions.has_admin_panel or user.privacy_accepted_at is not None:
+            user = await users_service.remember_profile(session, profile, now=now)
+        elif user.username or user.first_name or user.last_name:
+            user = await users_service.forget_profile(session, user)
         data["user"] = user
         data["permissions"] = permissions
         data["runtime_settings"] = runtime_settings

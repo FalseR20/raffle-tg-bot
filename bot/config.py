@@ -54,7 +54,10 @@ class Settings(BaseSettings):
     rules_url: str
     privacy_url: str
     rules_version: str = "1"
-    privacy_version: str = "1"
+    privacy_version: str = "2"
+    operator_name: str | None = None
+    operator_address: str | None = None
+    storage_country: str | None = None
     support_contact: str | None = None
     management_log_chat_id: int | None = None
 
@@ -104,7 +107,14 @@ class Settings(BaseSettings):
         return value
 
     @field_validator(
-        "channel_url", "support_contact", "webhook_url", "webhook_secret", mode="before"
+        "channel_url",
+        "support_contact",
+        "operator_name",
+        "operator_address",
+        "storage_country",
+        "webhook_url",
+        "webhook_secret",
+        mode="before",
     )
     @classmethod
     def _empty_str_to_none(cls, value: object) -> object:

@@ -86,25 +86,6 @@ def channel_line(channel_title: str | None) -> str:
     return f"«{esc(channel_title)}»"
 
 
-def consent_text(
-    *,
-    rules_url: str,
-    privacy_url: str,
-    age_required: bool,
-    rules_version: str,
-    privacy_version: str,
-) -> str:
-    text = (
-        "Для участия примите правила розыгрыша и политику конфиденциальности\\.\n\n"
-        f"[Правила розыгрыша]({escape_url(rules_url)})\n"
-        f"[Политика конфиденциальности]({escape_url(privacy_url)})\n\n"
-        f"Версии: правила {esc(rules_version)} · политика {esc(privacy_version)}\\."
-    )
-    if age_required:
-        text += "\n\nПодтвердите, что вам 18 лет или больше\\."
-    return text
-
-
 def no_active_raffle_text(channel_title: str | None) -> str:
     title = channel_line(channel_title)
     if title:
