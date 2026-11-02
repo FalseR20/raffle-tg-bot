@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     channel_url: str | None = None
     channel_title: str = "Тетрадь с полями🪶"
     privacy_url: str
-    privacy_version: str = "3"
+    privacy_version: str = "4"
     operator_name: str | None = None
     operator_address: str | None = None
     storage_country: str | None = None

@@ -47,10 +47,8 @@ the same handler/middleware path with a fake Telegram transport.
 14. **Consent.** Privacy acceptance is required before organization buttons. The bot does not
     publish or ask for raffle rules. A privacy version change invalidates prior consent.
     Publication of a winner's name is opt-in; the default is ticket number only. The privacy text
-    lives in the bot (`/privacy`) and follows the Belarus personal-data law (No. 99-Z): the
-    pre-consent notice is separate from the full policy, and name publication is a second consent.
-    `OPERATOR_NAME` and `OPERATOR_ADDRESS` must be set or the accept button is hidden.
-    `PRIVACY_URL` stays as the public copy of the same text. This draft is not a lawyer's opinion.
+    is the fixed wording for the channel «Тетрадь с полями», shown before «Принимаю» and via
+    `/privacy`. `OPERATOR_NAME` and `OPERATOR_ADDRESS` are not required to accept it.
 15. **Age confirmation.** Controlled by `REQUIRE_AGE_CONFIRMATION` (default `false`). The spec
     mentions age confirmation as conditional but does not define the environment variable.
 16. **Draft TTL.** 24 hours from creation, checked by the scheduler. A draft that never reached

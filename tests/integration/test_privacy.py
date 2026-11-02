@@ -11,7 +11,6 @@ import pytest
 from bot.db.enums import ApplicationStatus
 from bot.db.session import session_scope
 from bot.services import users as users_service
-from bot.services.errors import ValidationError
 from bot.services.privacy import withdraw_consent
 from bot.services.settings import environment_defaults
 from tests.helpers import make_application, make_organization, make_raffle, make_user
@@ -30,7 +29,7 @@ class RecordingStorage:
         self.deleted.append(key)
 
 
-async def test_consent_requires_operator_identity(session_factory, env_settings):
+async def test_consent_does_not_require_operator_identity(session_factory, env_settings):
     async with session_scope(session_factory) as session:
         user = await make_user(session, 500)
         settings = replace(
@@ -38,10 +37,10 @@ async def test_consent_requires_operator_identity(session_factory, env_settings)
             operator_name=None,
             operator_address=None,
         )
-        with pytest.raises(ValidationError):
-            await users_service.accept_consent(
-                session, user, settings=settings, now=datetime.now(UTC), publish_name=None
-            )
+        await users_service.accept_consent(
+            session, user, settings=settings, now=datetime.now(UTC), publish_name=None
+        )
+        assert users_service.has_valid_consent(user, settings)
 
 
 async def test_withdrawal_removes_nickname_and_receipts(session_factory, env_settings):

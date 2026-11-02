@@ -63,8 +63,8 @@ The default compose mapping exposes PostgreSQL on `localhost:5433` and RustFS on
 - `DATABASE_URL` — must start with `postgresql+asyncpg://`.
 - `RUSTFS_*` — private bucket credentials and endpoint. Production must use TLS and unique
   credentials.
-- `PRIVACY_URL` — public copy of the privacy policy. The text itself is shown in the bot (`/privacy`) before consent; keep the page identical to that text and raise `PRIVACY_VERSION` when it changes. The bot does not publish raffle rules.
-- `OPERATOR_NAME`, `OPERATOR_ADDRESS` — who processes personal data. Participation stays closed until both are set. `STORAGE_COUNTRY` is where the database and receipts are stored (`Беларусь` if they stay in Belarus).
+- `PRIVACY_URL` — optional public copy of the privacy policy. The text participants accept is the fixed policy in the bot (`/privacy`). Raise `PRIVACY_VERSION` when that wording changes. The bot does not publish raffle rules.
+- `OPERATOR_NAME`, `OPERATOR_ADDRESS`, `STORAGE_COUNTRY` — optional operator details. They are not inserted into the privacy policy.
 
 The bot fails fast with a clear message if required settings are missing or invalid.
 

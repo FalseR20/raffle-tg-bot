@@ -24,7 +24,7 @@ from bot.keyboards.participant import (
 from bot.services import notifications
 from bot.services.raffles import close_due
 from bot.services.settings import RuntimeSettings
-from bot.services.users import has_valid_consent, operator_is_identified
+from bot.services.users import has_valid_consent
 from bot.texts import privacy, ru
 
 
@@ -35,30 +35,11 @@ async def send_consent(
     *,
     message_thread_id: int | None = None,
 ) -> None:
-    """Show the legal notice before the consent button."""
-    identified = operator_is_identified(settings)
-    if not identified:
-        await notifications.send_text(
-            bot,
-            chat_id,
-            privacy.operator_missing_notice(),
-            reply_markup=consent_keyboard(
-                age_required=settings.require_age_confirmation,
-                can_accept=False,
-            ),
-            message_thread_id=message_thread_id,
-        )
-        return
+    """Show the privacy policy before the consent button."""
     await notifications.send_text(
         bot,
         chat_id,
-        privacy.processing_notice(settings),
-        message_thread_id=message_thread_id,
-    )
-    await notifications.send_text(
-        bot,
-        chat_id,
-        privacy.rights_notice(settings),
+        privacy.policy_text(),
         reply_markup=consent_keyboard(
             age_required=settings.require_age_confirmation,
             can_accept=True,
@@ -77,7 +58,7 @@ async def send_policy(
 ) -> None:
     pages = privacy.policy_pages(settings)
     markup = policy_keyboard(
-        can_accept=operator_is_identified(settings) and not has_valid_consent(user, settings),
+        can_accept=not has_valid_consent(user, settings),
         age_required=settings.require_age_confirmation,
         has_publish_consent=user.publish_name_consent_at is not None,
     )

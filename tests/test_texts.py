@@ -27,36 +27,14 @@ def raffle():
     )
 
 
-def _privacy_facts(**overrides):
-    values = {
-        "operator_name": "Иван_Петров [тест] (тест).",
-        "operator_address": "г. Минск, ул. Примерная, д. 1",
-        "storage_country": "Беларусь",
-        "support_contact": "@support",
-        "privacy_url": "https://example.org/privacy",
-        "privacy_version": "2.0",
-        "receipt_retention_days": 90,
-        "require_age_confirmation": True,
-        "channel_title": 'Канал "Тест"',
-    }
-    values.update(overrides)
-    return SimpleNamespace(**values)
-
-
 TEXTS = [
-    privacy.processing_notice(_privacy_facts()),
-    privacy.rights_notice(_privacy_facts()),
-    privacy.operator_missing_notice(),
+    privacy.policy_text(),
     privacy.withdrawal_prompt(),
     privacy.withdrawal_done(failed=0),
     privacy.withdrawal_done(failed=2),
     privacy.withdrawal_done(failed=0, profile_cleared=False),
     privacy.withdrawal_kept(),
-    *privacy.policy_pages(_privacy_facts()),
-    *privacy.policy_pages(
-        _privacy_facts(storage_country="Германия", operator_name=None, operator_address=None)
-    ),
-    *privacy.policy_pages(_privacy_facts(storage_country=None)),
+    *privacy.policy_pages(),
     ru.no_active_raffle_text('Канал "Тест"'),
     ru.scheduled_raffle_text(raffle(), TZ),
     ru.active_raffle_text(raffle(), TZ, has_consent=True),
@@ -248,30 +226,17 @@ def test_archived_delete_prompt_uses_russian_plurals():
     validate_markdown_v2(many)
 
 
-def test_privacy_policy_states_what_the_raffle_stores():
-    facts = _privacy_facts()
-    notice = privacy.processing_notice(facts)
-    rights = privacy.rights_notice(facts)
-    policy = "\n".join(privacy.policy_pages(facts))
-    for page in privacy.policy_pages(facts):
-        assert len(page) < MESSAGE_LIMIT
-    assert "Оператор: Иван\\_Петров" in notice
-    assert "ник" in notice
-    assert "скриншот" in notice
-    assert "Telegram" in notice
-    assert "примите политику конфиденциальности" in rights
-    assert "Правила розыгрыша" not in rights
-    assert "Правила розыгрыша" not in policy
-    assert "отозвать" in rights.lower() or "Отозвать" in rights or "отозвать" in rights
+def test_privacy_policy_uses_the_channel_text():
+    policy = privacy.policy_text()
+    assert len(policy) < MESSAGE_LIMIT
+    assert "Тетрадь с полями" in policy
+    assert "Центр «Сирин»" in policy
+    assert "30 дней" in policy
+    assert "«Принимаю»" in policy
     assert "99\\-З" in policy
-    assert "чек" in policy
-    assert "Беларуси" in policy
-    closed = privacy.operator_missing_notice()
-    assert "закрыто" in closed
-    foreign = "\n".join(privacy.policy_pages(_privacy_facts(storage_country="Германия")))
-    assert "Германия" in foreign
-    unknown = "\n".join(privacy.policy_pages(_privacy_facts(storage_country=None)))
-    assert "не указана" in unknown
+    assert "юзернейм" in policy
+    assert "Правила розыгрыша" not in policy
+    assert privacy.policy_pages() == [policy]
 
 
 def test_ranges_and_pluralization_in_texts():

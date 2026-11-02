@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import User
 from bot.db.repositories import users as users_repo
-from bot.services.errors import ValidationError
 from bot.services.settings import RuntimeSettings
 from bot.texts.markdown import escape_markdown_v2
 
@@ -69,12 +68,6 @@ async def forget_profile(session: AsyncSession, user: User) -> User:
     return await users_repo.clear_profile(session, user)
 
 
-def operator_is_identified(settings: RuntimeSettings) -> bool:
-    name = (settings.operator_name or "").strip()
-    address = (settings.operator_address or "").strip()
-    return bool(name and address)
-
-
 def has_valid_consent(user: User, settings: RuntimeSettings) -> bool:
     privacy_ok = (
         user.privacy_accepted_at is not None and user.privacy_version == settings.privacy_version
@@ -100,10 +93,6 @@ async def accept_consent(
     publish_name: bool | None,
     profile: TelegramProfile | None = None,
 ) -> None:
-    if not operator_is_identified(settings):
-        raise ValidationError(
-            "Организатор ещё не указал имя и адрес. Согласие пока нельзя сохранить."
-        )
     await users_repo.record_consent(
         session,
         user,
