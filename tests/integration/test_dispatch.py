@@ -194,8 +194,9 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
     bot.messages.clear()
     await dp.feed_update(bot, _message(500, "/start", 2))
     text = bot.messages[-1][1]
-    assert "примите правила розыгрыша" in text
-    assert "Правила розыгрыша" in text
+    assert "примите политику конфиденциальности" in text
+    assert "Политика по ссылке" in text
+    assert "Правила розыгрыша" not in text
 
     bot.messages.clear()
     await dp.feed_update(bot, _message(100, "/admin", 3))

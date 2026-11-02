@@ -75,14 +75,11 @@ async def record_consent(
     session: AsyncSession,
     user: User,
     *,
-    rules_version: str,
     privacy_version: str,
     accepted_at: datetime,
     age_required: bool,
     publish_name: bool | None,
 ) -> None:
-    user.rules_accepted_at = accepted_at
-    user.rules_version = rules_version
     user.privacy_accepted_at = accepted_at
     user.privacy_version = privacy_version
     if age_required:

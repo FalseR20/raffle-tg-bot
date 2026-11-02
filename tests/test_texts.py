@@ -33,9 +33,7 @@ def _privacy_facts(**overrides):
         "operator_address": "г. Минск, ул. Примерная, д. 1",
         "storage_country": "Беларусь",
         "support_contact": "@support",
-        "rules_url": "https://example.org/rules?x=1&y=2",
         "privacy_url": "https://example.org/privacy",
-        "rules_version": "1.0",
         "privacy_version": "2.0",
         "receipt_retention_days": 90,
         "require_age_confirmation": True,
@@ -261,8 +259,9 @@ def test_privacy_policy_states_what_the_raffle_stores():
     assert "ник" in notice
     assert "скриншот" in notice
     assert "Telegram" in notice
-    assert "примите правила розыгрыша" in rights
-    assert "Правила розыгрыша" in rights
+    assert "примите политику конфиденциальности" in rights
+    assert "Правила розыгрыша" not in rights
+    assert "Правила розыгрыша" not in policy
     assert "отозвать" in rights.lower() or "Отозвать" in rights or "отозвать" in rights
     assert "99\\-З" in policy
     assert "чек" in policy

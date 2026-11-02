@@ -137,7 +137,6 @@ def env_settings() -> Settings:
         rustfs_access_key=os.environ.get("TEST_RUSTFS_ACCESS_KEY", "raffle-minio"),
         rustfs_secret_key=os.environ.get("TEST_RUSTFS_SECRET_KEY", "raffle-minio-secret"),
         rustfs_bucket=os.environ.get("TEST_RUSTFS_BUCKET", "raffle-test-receipts"),
-        rules_url="https://example.org/rules",
         privacy_url="https://example.org/privacy",
         operator_name="Тестовый организатор",
         operator_address="г. Минск, ул. Примерная, 1",

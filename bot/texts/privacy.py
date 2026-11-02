@@ -9,7 +9,7 @@ lawyer should review them before launch.
 The pre-consent notice is separate from the full policy. Article 5 requires
 the operator, purposes, data, term, authorised persons, actions and the
 person's rights before consent, and the rights explanation must not be buried
-in the rules or the policy.
+in the full policy.
 """
 
 from __future__ import annotations
@@ -28,9 +28,7 @@ class PrivacyFacts(Protocol):
     operator_address: str | None
     storage_country: str | None
     support_contact: str | None
-    rules_url: str
     privacy_url: str
-    rules_version: str
     privacy_version: str
     receipt_retention_days: int
     require_age_confirmation: bool
@@ -160,10 +158,7 @@ def rights_notice(facts: PrivacyFacts) -> str:
     if facts.require_age_confirmation:
         age = " Кнопка также подтверждает, что вам уже исполнилось 18 лет."
     lines = [
-        esc(
-            "Это сообщение только о ваших правах. Оно отдельно от правил розыгрыша "
-            "и от полного текста политики."
-        ),
+        esc("Это сообщение только о ваших правах. Оно отдельно от полного текста политики."),
         "",
         esc(
             "Вы можете: отозвать согласие в любой момент без объяснения причин; "
@@ -197,10 +192,9 @@ def rights_notice(facts: PrivacyFacts) -> str:
         ),
         "",
         esc(
-            "Чтобы участвовать, примите правила розыгрыша и политику конфиденциальности. "
-            f"Версии: правила {facts.rules_version}, политика {facts.privacy_version}."
+            "Чтобы участвовать, примите политику конфиденциальности. "
+            f"Версия политики: {facts.privacy_version}."
         ),
-        f"[Правила розыгрыша]({escape_url(facts.rules_url)})",
         f"[Политика по ссылке]({escape_url(facts.privacy_url)})",
     ]
     return "\n".join(lines)
@@ -278,7 +272,6 @@ def _policy_blocks(facts: PrivacyFacts) -> list[str]:
                     "для согласия действует редакция этой версии в боте."
                 ),
                 f"[Политика по ссылке]({escape_url(facts.privacy_url)})",
-                f"[Правила розыгрыша]({escape_url(facts.rules_url)})",
             ]
         ),
         "\n".join(
@@ -412,8 +405,7 @@ def _policy_blocks(facts: PrivacyFacts) -> list[str]:
                 esc(
                     "Если меняются цели, сроки, состав данных или порядок прав, "
                     "оператор увеличивает "
-                    f"версию политики. Сейчас это версия {facts.privacy_version} "
-                    f"(правила — версия {facts.rules_version}). "
+                    f"версию политики. Сейчас это версия {facts.privacy_version}. "
                     "Старое согласие новую редакцию не покрывает: "
                     "бот снова покажет текст и кнопку. "
                     "Пока новая кнопка не нажата, новую заявку отправить нельзя."

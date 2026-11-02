@@ -24,9 +24,7 @@ from bot.utils.url import normalize_http_url, normalize_optional_http_url
 SETTING_KEYS = (
     "channel_url",
     "channel_title",
-    "rules_url",
     "privacy_url",
-    "rules_version",
     "privacy_version",
     "operator_name",
     "operator_address",
@@ -47,9 +45,7 @@ SETTING_KEYS = (
 class RuntimeSettings:
     channel_url: str | None
     channel_title: str | None
-    rules_url: str
     privacy_url: str
-    rules_version: str
     privacy_version: str
     operator_name: str | None
     operator_address: str | None
@@ -76,9 +72,7 @@ def environment_defaults(env: Settings) -> RuntimeSettings:
     return RuntimeSettings(
         channel_url=env.channel_url,
         channel_title=env.channel_title,
-        rules_url=env.rules_url,
         privacy_url=env.privacy_url,
-        rules_version=env.rules_version,
         privacy_version=env.privacy_version,
         operator_name=env.operator_name,
         operator_address=env.operator_address,
@@ -100,10 +94,10 @@ def environment_defaults(env: Settings) -> RuntimeSettings:
 
 def parse_setting_value(key: str, raw: str | int | bool | None) -> Any:
     """Parse and validate a raw admin input for a settings key."""
-    if key in {"channel_title", "rules_url", "privacy_url", "rules_version", "privacy_version"}:
+    if key in {"channel_title", "privacy_url", "privacy_version"}:
         if not isinstance(raw, str) or not raw.strip():
             raise ValidationError("Значение не может быть пустым.")
-        if key in {"rules_url", "privacy_url"}:
+        if key == "privacy_url":
             try:
                 return normalize_http_url(raw)
             except ValueError as exc:
@@ -232,9 +226,7 @@ def setting_label(key: str) -> str:
     return {
         "channel_url": "Ссылка на канал",
         "channel_title": "Название канала",
-        "rules_url": "Ссылка на правила",
         "privacy_url": "Ссылка на политику конфиденциальности",
-        "rules_version": "Версия правил",
         "privacy_version": "Версия политики",
         "operator_name": "Имя оператора",
         "operator_address": "Адрес оператора",

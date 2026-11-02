@@ -53,7 +53,7 @@ async def _assert_consent(bot: Bot, chat_id: int, user: User, settings: RuntimeS
     await notifications.send_text(
         bot,
         chat_id,
-        "Сначала примите правила и политику конфиденциальности: /start",
+        "Сначала примите политику конфиденциальности: /start",
     )
     return False
 
