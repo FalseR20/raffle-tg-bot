@@ -51,10 +51,8 @@ class Settings(BaseSettings):
 
     channel_url: str | None = None
     channel_title: str = "Тетрадь с полями🪶"
-    rules_url: str
     privacy_url: str
-    rules_version: str = "1"
-    privacy_version: str = "2"
+    privacy_version: str = "3"
     operator_name: str | None = None
     operator_address: str | None = None
     storage_country: str | None = None
@@ -122,7 +120,7 @@ class Settings(BaseSettings):
             return None
         return value
 
-    @field_validator("channel_url", "rules_url", "privacy_url")
+    @field_validator("channel_url", "privacy_url")
     @classmethod
     def _validate_urls(cls, value: str | None) -> str | None:
         if value is None:

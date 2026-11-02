@@ -42,7 +42,7 @@ def test_parse_setting_values(key, raw, expected):
         ("receipt_retention_days", "0"),
         ("confirm_two_step", "maybe"),
         ("timezone", "Mars/Olympus"),
-        ("rules_url", "ftp://example.org"),
+        ("privacy_url", "ftp://example.org"),
         ("operator_name", "x" * 201),
         ("channel_url", "not-a-url"),
         ("channel_url", "https://example.org/a b"),

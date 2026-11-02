@@ -31,9 +31,7 @@ router.message.middleware(ManagersOnlyMiddleware())
 EDITABLE_KEYS = [
     "channel_url",
     "channel_title",
-    "rules_url",
     "privacy_url",
-    "rules_version",
     "privacy_version",
     "operator_name",
     "operator_address",

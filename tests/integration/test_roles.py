@@ -250,7 +250,7 @@ async def test_consent_versions_require_reacceptance(session_factory, env_settin
         assert users_service.has_valid_consent(user, settings)
         from dataclasses import replace
 
-        changed = replace(environment_defaults(env_settings), rules_version="2")
+        changed = replace(environment_defaults(env_settings), privacy_version="9")
         assert not users_service.has_valid_consent(user, changed)
 
 

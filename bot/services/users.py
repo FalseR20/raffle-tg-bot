@@ -76,17 +76,14 @@ def operator_is_identified(settings: RuntimeSettings) -> bool:
 
 
 def has_valid_consent(user: User, settings: RuntimeSettings) -> bool:
-    rules_ok = user.rules_accepted_at is not None and user.rules_version == settings.rules_version
     privacy_ok = (
         user.privacy_accepted_at is not None and user.privacy_version == settings.privacy_version
     )
     age_ok = not settings.require_age_confirmation or user.age_confirmed_at is not None
-    return rules_ok and privacy_ok and age_ok
+    return privacy_ok and age_ok
 
 
 def consent_missing_reason(user: User, settings: RuntimeSettings) -> str | None:
-    if user.rules_accepted_at is None or user.rules_version != settings.rules_version:
-        return "rules"
     if user.privacy_accepted_at is None or user.privacy_version != settings.privacy_version:
         return "privacy"
     if settings.require_age_confirmation and user.age_confirmed_at is None:
@@ -110,7 +107,6 @@ async def accept_consent(
     await users_repo.record_consent(
         session,
         user,
-        rules_version=settings.rules_version,
         privacy_version=settings.privacy_version,
         accepted_at=now,
         age_required=settings.require_age_confirmation,

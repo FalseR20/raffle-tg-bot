@@ -26,7 +26,7 @@ from bot.services.permissions import Permissions
 from bot.services.settings import RuntimeSettings
 from bot.services.storage import ReceiptStorage
 from bot.texts import privacy
-from bot.texts.markdown import escape_markdown_v2, escape_url
+from bot.texts.markdown import escape_markdown_v2
 
 router = Router(name="common")
 
@@ -232,7 +232,7 @@ async def on_consent_cancel(
         await notifications.send_text(
             bot,
             callback.message.chat.id,
-            "Без согласия с правилами и политикой конфиденциальности участие невозможно\\.",
+            "Без согласия с политикой конфиденциальности участие невозможно\\.",
         )
 
 
@@ -276,17 +276,6 @@ async def cmd_help(
     if runtime_settings.support_contact:
         text += f"\n\nПоддержка: {escape_markdown_v2(runtime_settings.support_contact)}"
     await notifications.send_text(bot, message.chat.id, text)
-
-
-@router.message(Command("rules"))
-async def cmd_rules(message: Message, runtime_settings: RuntimeSettings, bot: Bot) -> None:
-    await notifications.send_text(
-        bot,
-        message.chat.id,
-        "Правила розыгрыша:\n\n"
-        f"[Правила]({escape_url(runtime_settings.rules_url)})\n\n"
-        "Политика конфиденциальности открывается командой /privacy\\.",
-    )
 
 
 @router.message(Command("privacy"))

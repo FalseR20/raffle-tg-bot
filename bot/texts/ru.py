@@ -113,7 +113,7 @@ def active_raffle_text(raffle: HasRaffle, tz: ZoneInfo, *, has_consent: bool) ->
         "Выберите организацию:"
     )
     if not has_consent:
-        base = "Для участия примите правила розыгрыша и политику конфиденциальности\\.\n\n" + base
+        base = "Для участия примите политику конфиденциальности\\.\n\n" + base
     return base
 
 

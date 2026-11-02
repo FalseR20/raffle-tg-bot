@@ -195,11 +195,7 @@ async def _send_my(
     else:
         summary += "\n\nЗаявок пока нет\\."
 
-    can_send_more = (
-        raffle.status is RaffleStatus.ACTIVE
-        and user.rules_accepted_at is not None
-        and has_valid_consent(user, settings)
-    )
+    can_send_more = raffle.status is RaffleStatus.ACTIVE and has_valid_consent(user, settings)
     await notifications.send_text(
         bot,
         chat_id,
@@ -383,7 +379,7 @@ async def on_upload_new_receipt(
         return
     if not has_valid_consent(user, runtime_settings):
         await callback.answer(
-            "Сначала примите правила и политику конфиденциальности: /start",
+            "Сначала примите политику конфиденциальности: /start",
             show_alert=True,
         )
         return
