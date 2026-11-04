@@ -575,16 +575,20 @@ async def on_edit_field(
     await state.set_state(RaffleEdit.value)
     await state.update_data(raffle_id=raffle.id, field=field)
     await callback.answer()
-    end_at_example = escape_markdown_v2(datetime_input_example(utcnow(), runtime_settings.timezone))
+    date_example = escape_markdown_v2(datetime_input_example(utcnow(), runtime_settings.timezone))
     prompt = {
         "title": "Введите новое название:",
         "description": "Введите новое описание:",
         "ticket_price": "Введите новую цену билета:",
         "min_amount": "Введите новую минимальную сумму:",
         "prizes_count": "Введите новое количество призов:",
+        "start_at": (
+            "Введите новую дату начала в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ\\. "
+            f"Например: {date_example}\\."
+        ),
         "end_at": (
             "Введите новую дату окончания в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ\\. "
-            f"Например: {end_at_example}\\."
+            f"Например: {date_example}\\."
         ),
         "channel_url": "Введите ссылку на канал или «\\-», чтобы убрать:",
         "channel_title": "Введите название канала или «\\-», чтобы убрать:",
@@ -637,6 +641,10 @@ async def _handle_edit_value(
                 raffle_input = _replace(raffle_input, min_amount=parse_decimal(raw))
             elif field == "prizes_count":
                 raffle_input = _replace(raffle_input, prizes_count=int(raw))
+            elif field == "start_at":
+                raffle_input = _replace(
+                    raffle_input, start_at=parse_datetime(raw, runtime_settings.timezone)
+                )
             elif field == "channel_url":
                 raffle_input = _replace(
                     raffle_input,

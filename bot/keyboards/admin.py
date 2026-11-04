@@ -232,6 +232,7 @@ def raffle_edit_fields(raffle_id: int, *, locked: bool) -> InlineKeyboardMarkup:
         ("Цена билета", "ticket_price"),
         ("Мин. сумма", "min_amount"),
         ("Призы", "prizes_count"),
+        ("Дата начала", "start_at"),
         ("Дата окончания", "end_at"),
         ("Ссылка на канал", "channel_url"),
         ("Название канала", "channel_title"),
@@ -246,6 +247,7 @@ def raffle_edit_fields(raffle_id: int, *, locked: bool) -> InlineKeyboardMarkup:
                 "ticket_price",
                 "min_amount",
                 "prizes_count",
+                "start_at",
                 "organizations",
             }
             else label,

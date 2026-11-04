@@ -44,6 +44,7 @@ from bot.services.raffles import (
     purge_archived_receipts,
     start_now,
     stop_acceptance,
+    update_raffle,
     validate_input,
 )
 from tests.helpers import (
@@ -361,6 +362,71 @@ async def test_duplicate_raffle_resets_counter_and_dates(session_factory):
         assert copy.last_ticket_number == 0
         assert copy.start_at > now
         assert copy.status is RaffleStatus.DRAFT
+
+
+async def test_duplicate_raffle_start_date_can_be_edited(session_factory):
+    async with session_scope(session_factory) as session:
+        org = await make_organization(session)
+        raffle = await make_raffle(session, organizations=[org], last_ticket_number=42)
+        raffle_id = raffle.id
+    async with session_scope(session_factory) as session:
+        raffle_row = await session.get(Raffle, raffle_id)
+        copy = await duplicate(session, actor=ADMIN, raffle=raffle_row, now=datetime.now(UTC))
+        copy_id = copy.id
+
+    new_start = datetime.now(UTC) + timedelta(days=5)
+    new_end = new_start + timedelta(days=10)
+    async with session_scope(session_factory) as session:
+        copy_row = await session.get(Raffle, copy_id)
+        await update_raffle(
+            session,
+            actor=ADMIN,
+            raffle=copy_row,
+            data=RaffleInput(
+                title=copy_row.title,
+                description=copy_row.description,
+                ticket_price=copy_row.ticket_price,
+                min_amount=copy_row.min_amount,
+                prizes_count=copy_row.prizes_count,
+                start_at=new_start,
+                end_at=new_end,
+                channel_url=copy_row.channel_url,
+                channel_title=copy_row.channel_title,
+                rules_text=copy_row.rules_text,
+            ),
+        )
+
+    async with session_factory() as session:
+        refreshed = await session.get(Raffle, copy_id)
+        assert refreshed.start_at == new_start
+        assert refreshed.end_at == new_end
+
+
+async def test_active_raffle_start_date_is_locked(session_factory):
+    async with session_scope(session_factory) as session:
+        org = await make_organization(session)
+        raffle = await make_raffle(session, organizations=[org])
+
+    async with session_scope(session_factory) as session:
+        raffle_row = await session.get(Raffle, raffle.id)
+        with pytest.raises(InvalidStateError):
+            await update_raffle(
+                session,
+                actor=ADMIN,
+                raffle=raffle_row,
+                data=RaffleInput(
+                    title=raffle_row.title,
+                    description=raffle_row.description,
+                    ticket_price=raffle_row.ticket_price,
+                    min_amount=raffle_row.min_amount,
+                    prizes_count=raffle_row.prizes_count,
+                    start_at=raffle_row.start_at + timedelta(hours=1),
+                    end_at=raffle_row.end_at,
+                    channel_url=raffle_row.channel_url,
+                    channel_title=raffle_row.channel_title,
+                    rules_text=raffle_row.rules_text,
+                ),
+            )
 
 
 async def test_input_validation(session_factory):
