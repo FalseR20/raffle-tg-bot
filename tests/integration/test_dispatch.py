@@ -30,6 +30,8 @@ class FakeBot:
     def __init__(self) -> None:
         self.messages: list[tuple[int, str, dict]] = []
         self.answered: list[str] = []
+        self.sent_count = 0
+        self.edit_count = 0
         self.id = 999
         self.username = "test_bot"
 
@@ -49,9 +51,21 @@ class FakeBot:
     async def send_message(self, chat_id, text, **kwargs):
         if kwargs.get("parse_mode") == "MarkdownV2":
             validate_markdown_v2(text)
+        self.sent_count += 1
         self.messages.append((chat_id, text, kwargs))
         return Message(
             message_id=len(self.messages),
+            date=datetime.now(UTC),
+            chat=Chat(id=chat_id, type="private"),
+        )
+
+    async def edit_message_text(self, text, chat_id, message_id, **kwargs):
+        if kwargs.get("parse_mode") == "MarkdownV2":
+            validate_markdown_v2(text)
+        self.edit_count += 1
+        self.messages.append((chat_id, text, kwargs))
+        return Message(
+            message_id=message_id,
             date=datetime.now(UTC),
             chat=Chat(id=chat_id, type="private"),
         )
@@ -81,9 +95,6 @@ class FakeBot:
         return destination
 
     async def edit_message_caption(self, *args, **kwargs):
-        return True
-
-    async def edit_message_text(self, *args, **kwargs):
         return True
 
 
@@ -203,8 +214,12 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
     assert any("Админ" in text for _, text, _ in bot.messages)
 
     bot.messages.clear()
+    bot.sent_count = 0
+    bot.edit_count = 0
     await dp.feed_update(bot, _callback(100, "adm:menu", 4))
     assert any("Выберите раздел" in text for _, text, _ in bot.messages)
+    assert bot.edit_count == 1
+    assert bot.sent_count == 0
 
     bot.messages.clear()
     await dp.feed_update(bot, _message(500, "/admin", 5))
@@ -276,6 +291,8 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
 
     # Admin wizard: one-tap defaults instead of typing "-".
     bot.messages.clear()
+    bot.sent_count = 0
+    bot.edit_count = 0
     await dp.feed_update(bot, _callback(100, "adm:raffle_new", 17))
     for update_id, text in (
         (18, "QoL raffle"),
@@ -285,6 +302,8 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
         await dp.feed_update(bot, _message(100, text, update_id))
     await dp.feed_update(bot, _callback(100, "rw:default:min_amount", 21))
     assert any("количество призов" in text for _, text, _ in bot.messages)
+    assert bot.sent_count == 0
+    assert bot.edit_count == 5
     await dp.feed_update(bot, _message(100, "1", 22))
     await dp.feed_update(bot, _message(100, "01.01.2027 10:00", 23))
     await dp.feed_update(bot, _message(100, "01.02.2027 10:00", 24))

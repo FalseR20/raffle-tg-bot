@@ -207,7 +207,9 @@ async def on_setting_value(
         )
         await session.commit()
     except ServiceError as exc:
-        await notifications.send_text(bot, message.chat.id, escape_markdown_v2(exc.user_message))
+        await notifications.send_text(
+            bot, message.chat.id, escape_markdown_v2(exc.user_message), new_message=True
+        )
         return
     await state.clear()
     await notifications.send_text(bot, message.chat.id, "Сохранено\\.")

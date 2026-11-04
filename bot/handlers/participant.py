@@ -32,6 +32,7 @@ from bot.keyboards.participant import (
     payment_methods_keyboard,
     receipt_keyboard,
 )
+from bot.middlewares.ui import EditCurrentMessageMiddleware
 from bot.services import applications as applications_service
 from bot.services import notifications
 from bot.services.cards import finalize_cancelled
@@ -45,6 +46,8 @@ from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
 
 router = Router(name="participant")
+router.callback_query.outer_middleware(EditCurrentMessageMiddleware())
+router.message.outer_middleware(EditCurrentMessageMiddleware())
 
 
 async def _assert_consent(bot: Bot, chat_id: int, user: User, settings: RuntimeSettings) -> bool:
@@ -609,7 +612,10 @@ async def on_amount(
 ) -> None:
     if not limiter.allow("amount", user.id, limit=10, window_seconds=60):
         await notifications.send_text(
-            bot, message.chat.id, "Слишком много попыток\\. Подождите минуту\\."
+            bot,
+            message.chat.id,
+            "Слишком много попыток\\. Подождите минуту\\.",
+            new_message=True,
         )
         return
     if not await _assert_participation_allowed(bot, message.chat.id, user, runtime_settings):
@@ -646,6 +652,7 @@ async def on_amount(
                 max_amount=runtime_settings.max_donation,
             ),
             reply_markup=instructions_keyboard(),
+            new_message=True,
         )
         return
 

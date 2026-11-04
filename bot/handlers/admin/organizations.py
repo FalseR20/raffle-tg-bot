@@ -138,7 +138,9 @@ async def on_org_name(
         return
     name = (message.text or "").strip()
     if not name:
-        await notifications.send_text(bot, message.chat.id, "Название не может быть пустым\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "Название не может быть пустым\\.", new_message=True
+        )
         return
     await state.update_data(name=name)
     await state.set_state(OrganizationWizard.description)
@@ -176,7 +178,9 @@ async def on_org_chat(
     try:
         chat_id = int((message.text or "").strip())
     except ValueError:
-        await notifications.send_text(bot, message.chat.id, "ID чата должен быть числом\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "ID чата должен быть числом\\.", new_message=True
+        )
         return
     await state.update_data(review_chat_id=chat_id)
     await state.set_state(OrganizationWizard.review_thread)
@@ -203,7 +207,7 @@ async def on_org_thread(
         thread_id = None if raw == "-" else int(raw)
     except ValueError:
         await notifications.send_text(
-            bot, message.chat.id, "Введите число или нажмите «Без темы»\\."
+            bot, message.chat.id, "Введите число или нажмите «Без темы»\\.", new_message=True
         )
         return
     await state.update_data(review_thread_id=thread_id)
@@ -493,7 +497,9 @@ async def on_org_edit_value(
         else:
             raise ValueError("Неизвестное поле.")
     except ValueError as exc:
-        await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
+        await notifications.send_text(
+            bot, message.chat.id, escape_markdown_v2(str(exc)), new_message=True
+        )
         return
     await audit_repo.log(
         session,

@@ -487,7 +487,7 @@ async def on_search_query(
     query = (message.text or "").strip()
     await state.clear()
     if not query:
-        await notifications.send_text(bot, message.chat.id, "Пустой запрос\\.")
+        await notifications.send_text(bot, message.chat.id, "Пустой запрос\\.", new_message=True)
         return
     await _send_list(
         session,

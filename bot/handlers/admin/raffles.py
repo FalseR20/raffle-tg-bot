@@ -13,7 +13,7 @@ from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import participants as participants_repo
 from bot.db.repositories import raffles as raffles_repo
 from bot.db.repositories import winners as winners_repo
-from bot.handlers.admin.common import parse_datetime
+from bot.handlers.admin.common import parse_datetime, remember_ui_message
 from bot.keyboards.admin import (
     confirm_action,
     finish_confirmation,
@@ -175,12 +175,13 @@ async def on_new(
     await state.set_state(RaffleWizard.title)
     await state.update_data(mode="create")
     await callback.answer()
-    await notifications.send_text(
+    delivery = await notifications.send_text(
         bot,
         callback.message.chat.id,
         "Введите название розыгрыша:",
         reply_markup=wizard_cancel(),
     )
+    await remember_ui_message(state, delivery)
 
 
 @router.callback_query(F.data.regexp(r"^adm:raffle_activate:\d+$"))

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import User
@@ -66,12 +66,16 @@ async def on_menu(
 async def on_help(callback: CallbackQuery, bot: Bot, permissions: Permissions) -> None:
     if callback.message is None:
         return
+    back = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="⬅️ В меню", callback_data="adm:menu")]]
+    )
     if not permissions.is_org_rep or permissions.can_manage_raffles:
         await callback.answer()
         await notifications.send_text(
             bot,
             callback.message.chat.id,
             "Раздел помощи админ\\-панели\\. Используйте меню или /admin\\.",
+            reply_markup=back,
         )
         return
     await callback.answer()
@@ -80,4 +84,5 @@ async def on_help(callback: CallbackQuery, bot: Bot, permissions: Permissions) -
         callback.message.chat.id,
         "Вы видите заявки только своей организации\\. "
         "Подтверждение и отклонение выполняются в чате проверки или здесь, в личном чате\\.",
+        reply_markup=back,
     )

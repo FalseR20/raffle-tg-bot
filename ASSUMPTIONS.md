@@ -197,3 +197,8 @@ and taxation. The bot does not publish results automatically.
     usual activation checks and replaces `start_at` with the current time; the original planned
     date is kept in the audit payload. Drafts still use "Activate", which schedules a future
     start and activates a past one.
+53. **One live UI message per flow.** In a private chat, a callback replaces the message that
+    carries the button, and text input inside an active wizard flow replaces the last bot
+    prompt. Commands still send a new message. Notifications, receipts, review cards and
+    deliberately multi-part output (policy pages, the per-application lines in "My
+    applications") stay as separate messages.

@@ -16,6 +16,7 @@ from bot.config import Settings
 from bot.db.models import User
 from bot.handlers.views import send_consent, send_policy, send_start_screen
 from bot.keyboards.participant import publish_consent_keyboard, withdraw_keyboard
+from bot.middlewares.ui import EditCurrentMessageMiddleware
 from bot.services import invites as invites_service
 from bot.services import notifications
 from bot.services import privacy as privacy_service
@@ -29,6 +30,8 @@ from bot.texts import privacy
 from bot.texts.markdown import escape_markdown_v2
 
 router = Router(name="common")
+router.callback_query.outer_middleware(EditCurrentMessageMiddleware())
+router.message.outer_middleware(EditCurrentMessageMiddleware())
 
 
 def _profile(callback: CallbackQuery) -> users_service.TelegramProfile | None:

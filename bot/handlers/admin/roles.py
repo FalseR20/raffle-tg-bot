@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.enums import InviteRole, RoleName
@@ -198,7 +198,9 @@ async def on_organizer_forward(
 ) -> None:
     forwarded = message.forward_from
     if forwarded is None or forwarded.is_bot:
-        await notifications.send_text(bot, message.chat.id, "Перешлите сообщение пользователя\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "Перешлите сообщение пользователя\\.", new_message=True
+        )
         return
     await state.clear()
     await _assign_by_id(
@@ -222,7 +224,9 @@ async def on_org_rep_forward(
 ) -> None:
     forwarded = message.forward_from
     if forwarded is None or forwarded.is_bot:
-        await notifications.send_text(bot, message.chat.id, "Перешлите сообщение пользователя\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "Перешлите сообщение пользователя\\.", new_message=True
+        )
         return
     await state.update_data(target_id=forwarded.id)
     organizations = await orgs_repo.list_all(session, only_active=True)
@@ -248,7 +252,9 @@ async def on_org_rep_id(
     try:
         target_id = int((message.text or "").strip())
     except ValueError:
-        await notifications.send_text(bot, message.chat.id, "Telegram ID должен быть числом\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "Telegram ID должен быть числом\\.", new_message=True
+        )
         return
     await state.update_data(target_id=target_id)
     organizations = await orgs_repo.list_all(session, only_active=True)
@@ -277,7 +283,9 @@ async def _assign_by_id(
         try:
             target_id = int((message.text or "").strip())
         except ValueError:
-            await notifications.send_text(bot, message.chat.id, "Telegram ID должен быть числом\\.")
+            await notifications.send_text(
+                bot, message.chat.id, "Telegram ID должен быть числом\\.", new_message=True
+            )
             return
     if await users_repo.get(session, target_id) is None:
         await users_repo.upsert(
@@ -300,12 +308,17 @@ async def _assign_by_id(
         )
         await session.commit()
     except ServiceError as exc:
-        await notifications.send_text(bot, message.chat.id, escape_markdown_v2(exc.user_message))
+        await notifications.send_text(
+            bot, message.chat.id, escape_markdown_v2(exc.user_message), new_message=True
+        )
         return
     await notifications.send_text(
         bot,
         message.chat.id,
         "✅ Роль выдана\\.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="⬅️ К ролям", callback_data="adm:roles")]]
+        ),
     )
     role_label = "организатора" if role is RoleName.ORGANIZER else "представителя организации"
     await notifications.send_text(
@@ -370,6 +383,9 @@ async def on_role_org(
         f"{escape_markdown_v2(created.url)}\n\n"
         "Ссылка действует 7 дней и срабатывает один раз\\. "
         "Кто откроет её первым, получит роль\\. Не пересылайте её публично\\.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="⬅️ К ролям", callback_data="adm:roles")]]
+        ),
     )
 
 
@@ -422,6 +438,9 @@ async def on_invite(
         f"{escape_markdown_v2(created.url)}\n\n"
         "Ссылка действует 7 дней и срабатывает один раз\\. "
         "Кто откроет её первым, получит роль\\.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="⬅️ К ролям", callback_data="adm:roles")]]
+        ),
     )
 
 

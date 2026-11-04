@@ -17,8 +17,11 @@ from bot.handlers.admin import (
     settings,
 )
 from bot.middlewares.admin import AdminPanelMiddleware
+from bot.middlewares.ui import EditCurrentMessageMiddleware
 
 admin_router = Router(name="admin")
+admin_router.callback_query.outer_middleware(EditCurrentMessageMiddleware())
+admin_router.message.outer_middleware(EditCurrentMessageMiddleware())
 admin_router.callback_query.middleware(AdminPanelMiddleware())
 for _module in (
     menu,

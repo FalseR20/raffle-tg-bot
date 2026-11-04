@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import Organization
@@ -128,7 +128,9 @@ async def on_method_title(
         return
     title = (message.text or "").strip()
     if not title or len(title) > 64:
-        await notifications.send_text(bot, message.chat.id, "Название: от 1 до 64 символов\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "Название: от 1 до 64 символов\\.", new_message=True
+        )
         return
     await state.update_data(title=title)
     await state.set_state(PaymentMethodWizard.instructions)
@@ -164,7 +166,9 @@ async def on_method_instructions(
     try:
         _validate_instructions(text)
     except ValueError as exc:
-        await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
+        await notifications.send_text(
+            bot, message.chat.id, escape_markdown_v2(str(exc)), new_message=True
+        )
         return
     data = await state.get_data()
     organization = await orgs_repo.get(session, int(data["organization_id"]))
@@ -251,7 +255,9 @@ async def on_method_edit_title(
     method = await orgs_repo.get_payment_method(session, int(data.get("method_id", 0)))
     title = (message.text or "").strip()
     if method is None or not title or len(title) > 64:
-        await notifications.send_text(bot, message.chat.id, "Название: от 1 до 64 символов\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "Название: от 1 до 64 символов\\.", new_message=True
+        )
         return
     method.title = title
     await audit_repo.log(
@@ -288,7 +294,9 @@ async def on_method_edit_instructions(
     try:
         _validate_instructions(text)
     except ValueError as exc:
-        await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
+        await notifications.send_text(
+            bot, message.chat.id, escape_markdown_v2(str(exc)), new_message=True
+        )
         return
     method.instructions_text = text
     await audit_repo.log(
@@ -373,6 +381,15 @@ async def on_method_preview(
         bot,
         callback.message.chat.id,
         f"👁 *{escape_markdown_v2(method.title)}*\n\n{safe_markdown(method.instructions_text)}",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="⬅️ К способу оплаты", callback_data=f"adm:method:{method.id}"
+                    )
+                ]
+            ]
+        ),
     )
 
 
@@ -423,4 +440,5 @@ async def on_markup_help(callback: CallbackQuery, bot: Bot) -> None:
         "*жирный* · _курсив_ · __подчёркнутый__ · ~зачёркнутый~\n"
         "[текст](https://example\\.com) — ссылка\n\n"
         "Спецсимволы \\. \\- \\! \\( \\) экранируются обратным слэшем\\.",
+        new_message=True,
     )

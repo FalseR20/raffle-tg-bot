@@ -22,6 +22,7 @@ from bot.keyboards.participant import (
     channel_keyboard,
     my_applications_keyboard,
 )
+from bot.middlewares.ui import EditCurrentMessageMiddleware
 from bot.services import applications as applications_service
 from bot.services import notifications
 from bot.services.cards import finalize_cancelled
@@ -34,6 +35,8 @@ from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
 
 router = Router(name="my")
+router.callback_query.outer_middleware(EditCurrentMessageMiddleware())
+router.message.outer_middleware(EditCurrentMessageMiddleware())
 
 
 @router.message(Command("my"))
@@ -216,6 +219,7 @@ async def _send_my(
                 tz=settings.timezone,
             ),
             reply_markup=_application_keyboard(application),
+            new_message=True,
         )
 
 

@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +48,12 @@ async def deny(event: TelegramObject, bot: Bot, text: str | None = None) -> None
         await event.answer(message, show_alert=True)
     else:
         await notifications.send_text(bot, event.chat.id, message)
+
+
+async def remember_ui_message(state: FSMContext, delivery: notifications.DeliveryResult) -> None:
+    """Remember which message the next text step should replace."""
+    if delivery.message is not None:
+        await state.update_data(ui_message_id=delivery.message.message_id)
 
 
 def parse_decimal(raw: str) -> Decimal:

@@ -69,6 +69,7 @@ async def send_policy(
             page,
             reply_markup=markup if index == len(pages) - 1 else None,
             message_thread_id=message_thread_id,
+            new_message=index > 0,
         )
 
 
@@ -219,6 +220,7 @@ async def send_start_screen(
             "ℹ️ У вас есть заявки, ожидающие проверки:\n\n"
             f"{lines}\n\nНовая заявка — это отдельное пожертвование и отдельный чек\\.",
             message_thread_id=message_thread_id,
+            new_message=True,
         )
 
 

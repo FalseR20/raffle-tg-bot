@@ -16,6 +16,7 @@ from bot.db.models import User
 from bot.handlers.participant import _assert_participation_allowed, _current_draft
 from bot.handlers.views import send_closed
 from bot.logging import get_logger
+from bot.middlewares.ui import EditCurrentMessageMiddleware
 from bot.services import notifications
 from bot.services.cards import send_application_card
 from bot.services.errors import (
@@ -32,6 +33,8 @@ from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
 
 router = Router(name="participant_receipts")
+router.callback_query.outer_middleware(EditCurrentMessageMiddleware())
+router.message.outer_middleware(EditCurrentMessageMiddleware())
 logger = get_logger(__name__)
 
 
@@ -53,11 +56,15 @@ async def on_receipt(
             bot,
             message.chat.id,
             "Пришлите, пожалуйста, один чек одним сообщением, без альбома\\.",
+            new_message=True,
         )
         return
     if not limiter.allow("receipt", user.id, limit=5, window_seconds=600):
         await notifications.send_text(
-            bot, message.chat.id, "Слишком много загрузок\\. Попробуйте позже\\."
+            bot,
+            message.chat.id,
+            "Слишком много загрузок\\. Попробуйте позже\\.",
+            new_message=True,
         )
         return
     if not await _assert_participation_allowed(bot, message.chat.id, user, runtime_settings):
@@ -97,6 +104,7 @@ async def on_receipt(
             bot,
             message.chat.id,
             ru.file_too_large_text(env_settings.receipt_max_mb),
+            new_message=True,
         )
         return
 
@@ -138,7 +146,9 @@ async def on_receipt(
                 env_settings.admin_id_set,
                 "⚠️ Ошибка RustFS при загрузке чека\\. Заявка не переведена на проверку\\.",
             )
-        await notifications.send_text(bot, message.chat.id, escape_markdown_v2(exc.user_message))
+        await notifications.send_text(
+            bot, message.chat.id, escape_markdown_v2(exc.user_message), new_message=True
+        )
         return
 
     await state.clear()
@@ -171,6 +181,7 @@ async def on_receipt(
                 message.chat.id,
                 "Заявка принята, но сейчас нет второго проверяющего, который может "
                 "подтвердить оплату\\. Администратор уже уведомлён\\.",
+                new_message=True,
             )
         await notifications.notify_admins(
             bot,
@@ -184,4 +195,4 @@ async def on_receipt(
 async def on_invalid_receipt(message: Message, bot: Bot, state: FSMContext) -> None:
     if message.text and message.text.startswith("/"):
         return
-    await notifications.send_text(bot, message.chat.id, ru.invalid_file_text())
+    await notifications.send_text(bot, message.chat.id, ru.invalid_file_text(), new_message=True)

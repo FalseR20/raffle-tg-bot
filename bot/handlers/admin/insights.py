@@ -11,6 +11,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     Message,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,6 +38,12 @@ from bot.utils.time import format_datetime, utcnow
 router = Router(name="admin_insights")
 
 
+def _back(callback: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data=callback)]]
+    )
+
+
 # --------------------------------- statistics --------------------------------
 
 
@@ -54,7 +62,15 @@ async def on_stats(
         await callback.answer("Нет текущего розыгрыша", show_alert=True)
         return
     await callback.answer()
-    await _send_stats(bot, callback.message.chat.id, session, raffle, permissions, runtime_settings)
+    await _send_stats(
+        bot,
+        callback.message.chat.id,
+        session,
+        raffle,
+        permissions,
+        runtime_settings,
+        back_callback="adm:menu",
+    )
 
 
 @router.callback_query(F.data.regexp(r"^adm:stats:\d+$"))
@@ -72,7 +88,15 @@ async def on_stats_raffle(
         await callback.answer("Розыгрыш не найден", show_alert=True)
         return
     await callback.answer()
-    await _send_stats(bot, callback.message.chat.id, session, raffle, permissions, runtime_settings)
+    await _send_stats(
+        bot,
+        callback.message.chat.id,
+        session,
+        raffle,
+        permissions,
+        runtime_settings,
+        back_callback=f"adm:raffle:{raffle.id}",
+    )
 
 
 async def _send_stats(
@@ -82,6 +106,8 @@ async def _send_stats(
     raffle,
     permissions: Permissions,
     settings: RuntimeSettings,
+    *,
+    back_callback: str = "adm:menu",
 ) -> None:
     stats = await build_statistics(
         session, raffle, allowed_organization_ids=permissions.allowed_organization_ids()
@@ -117,7 +143,12 @@ async def _send_stats(
             f"{escape_markdown_v2(row.name)}: {row.applications} / "
             f"{row.confirmed} / {escape_markdown_v2(ru.format_money(row.amount))} BYN"
         )
-    await notifications.send_text(bot, chat_id, "\n".join(lines))
+    await notifications.send_text(
+        bot,
+        chat_id,
+        "\n".join(lines),
+        reply_markup=_back(back_callback),
+    )
 
 
 # --------------------------------- integrity ---------------------------------
@@ -160,6 +191,7 @@ async def on_integrity(
             f"Счётчик: {report.last_ticket_number}\n"
             f"Сумма по заявкам: {report.confirmed_tickets_sum}\n"
             f"Сумма по участникам: {report.participant_tickets_sum}",
+            reply_markup=_back("adm:menu"),
         )
         return
     lines = ["🛡 *Проверка целостности*", "", "⚠️ Обнаружены расхождения:", ""]
@@ -170,7 +202,9 @@ async def on_integrity(
                 "  " + escape_markdown_v2(json.dumps(issue.details, ensure_ascii=False)[:300])
             )
     lines.append("\nОстановите подтверждения и проверьте данные вручную\\.")
-    await notifications.send_text(bot, callback.message.chat.id, "\n".join(lines))
+    await notifications.send_text(
+        bot, callback.message.chat.id, "\n".join(lines), reply_markup=_back("adm:menu")
+    )
 
 
 # ----------------------------------- audit -----------------------------------
@@ -371,7 +405,9 @@ async def on_winner_place(
     try:
         place = int((message.text or "").strip())
     except ValueError:
-        await notifications.send_text(bot, message.chat.id, "Введите целое число\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "Введите целое число\\.", new_message=True
+        )
         return
     data = await state.get_data()
     raffle = await raffles_repo.get(session, int(data.get("raffle_id", 0)))
@@ -380,7 +416,10 @@ async def on_winner_place(
         return
     if not 1 <= place <= raffle.prizes_count:
         await notifications.send_text(
-            bot, message.chat.id, f"Место должно быть от 1 до {raffle.prizes_count}\\."
+            bot,
+            message.chat.id,
+            f"Место должно быть от 1 до {raffle.prizes_count}\\.",
+            new_message=True,
         )
         return
     await state.update_data(place=place)
@@ -404,7 +443,9 @@ async def on_winner_ticket(
     try:
         ticket = int((message.text or "").strip())
     except ValueError:
-        await notifications.send_text(bot, message.chat.id, "Введите целое число\\.")
+        await notifications.send_text(
+            bot, message.chat.id, "Введите целое число\\.", new_message=True
+        )
         return
     data = await state.get_data()
     raffle = await raffles_repo.get(session, int(data.get("raffle_id", 0)))
@@ -422,7 +463,9 @@ async def on_winner_ticket(
         )
         await session.commit()
     except ServiceError as exc:
-        await notifications.send_text(bot, message.chat.id, escape_markdown_v2(exc.user_message))
+        await notifications.send_text(
+            bot, message.chat.id, escape_markdown_v2(exc.user_message), new_message=True
+        )
         return
     await state.clear()
     await notifications.send_text(bot, message.chat.id, "✅ Победитель записан\\.")

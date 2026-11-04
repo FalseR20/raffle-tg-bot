@@ -17,7 +17,7 @@ from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import organizations as orgs_repo
 from bot.db.repositories import raffles as raffles_repo
 from bot.domain.money import format_money
-from bot.handlers.admin.common import parse_datetime, parse_decimal
+from bot.handlers.admin.common import parse_datetime, parse_decimal, remember_ui_message
 from bot.handlers.admin.raffles import (
     _get_raffle,
     _guard,
@@ -120,7 +120,7 @@ async def _prompt(
         prompt = (
             f"{prompt} в формате ДД\\.ММ\\.ГГГГ ЧЧ:ММ\\. Например: {escape_markdown_v2(example)}\\."
         )
-    await notifications.send_text(
+    delivery = await notifications.send_text(
         bot,
         chat_id,
         prompt,
@@ -130,6 +130,7 @@ async def _prompt(
             default_text=default_text,
         ),
     )
+    await remember_ui_message(state, delivery)
 
 
 async def _start_organization_selection(
@@ -147,7 +148,7 @@ async def _start_organization_selection(
         selected_organizations=selected,
     )
     await state.set_state(RaffleWizard.organizations)
-    await notifications.send_text(
+    delivery = await notifications.send_text(
         bot,
         chat_id,
         "Выберите организации для розыгрыша:",
@@ -156,6 +157,7 @@ async def _start_organization_selection(
             set(selected),
         ),
     )
+    await remember_ui_message(state, delivery)
 
 
 @router.message(StateFilter(*WIZARD_INPUT_STEPS), F.text)
@@ -182,7 +184,9 @@ async def on_wizard_input(
 
     if step == "title":
         if not raw:
-            await notifications.send_text(bot, message.chat.id, "Название не может быть пустым\\.")
+            await notifications.send_text(
+                bot, message.chat.id, "Название не может быть пустым\\.", new_message=True
+            )
             return
         data["title"] = raw
         await state.update_data(**data)
@@ -204,7 +208,9 @@ async def on_wizard_input(
         try:
             data["ticket_price"] = str(parse_decimal(raw))
         except ValueError as exc:
-            await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
+            await notifications.send_text(
+                bot, message.chat.id, escape_markdown_v2(str(exc)), new_message=True
+            )
             return
         await state.update_data(**data)
         ticket_price = Decimal(data["ticket_price"])
@@ -225,7 +231,9 @@ async def on_wizard_input(
                 else str(parse_decimal(raw))
             )
         except ValueError as exc:
-            await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
+            await notifications.send_text(
+                bot, message.chat.id, escape_markdown_v2(str(exc)), new_message=True
+            )
             return
         await state.update_data(**data)
         await _prompt(bot, message.chat.id, "prizes_count", state)
@@ -237,7 +245,7 @@ async def on_wizard_input(
                 raise ValueError
         except ValueError:
             await notifications.send_text(
-                bot, message.chat.id, "Введите целое число не меньше 1\\."
+                bot, message.chat.id, "Введите целое число не меньше 1\\.", new_message=True
             )
             return
         data["prizes_count"] = prizes
@@ -248,7 +256,9 @@ async def on_wizard_input(
         try:
             data["start_at"] = parse_datetime(raw, runtime_settings.timezone).isoformat()
         except ValueError as exc:
-            await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
+            await notifications.send_text(
+                bot, message.chat.id, escape_markdown_v2(str(exc)), new_message=True
+            )
             return
         await state.update_data(**data)
         await _prompt(bot, message.chat.id, "end_at", state, tz=runtime_settings.timezone)
@@ -260,7 +270,9 @@ async def on_wizard_input(
             if end_at <= start_at:
                 raise ValueError("Дата окончания должна быть позже даты начала.")
         except ValueError as exc:
-            await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
+            await notifications.send_text(
+                bot, message.chat.id, escape_markdown_v2(str(exc)), new_message=True
+            )
             return
         data["end_at"] = end_at.isoformat()
         await state.update_data(**data)
@@ -281,7 +293,9 @@ async def on_wizard_input(
             try:
                 data["channel_url"] = normalize_optional_http_url(raw) or ""
             except ValueError as exc:
-                await notifications.send_text(bot, message.chat.id, escape_markdown_v2(str(exc)))
+                await notifications.send_text(
+                    bot, message.chat.id, escape_markdown_v2(str(exc)), new_message=True
+                )
                 return
         await state.update_data(**data)
         title_default = _channel_title_default_text(runtime_settings)
@@ -593,7 +607,8 @@ async def on_edit_field(
         "channel_url": "Введите ссылку на канал или «\\-», чтобы убрать:",
         "channel_title": "Введите название канала или «\\-», чтобы убрать:",
     }.get(field, "Введите новое значение:")
-    await notifications.send_text(bot, callback.message.chat.id, prompt)
+    delivery = await notifications.send_text(bot, callback.message.chat.id, prompt)
+    await remember_ui_message(state, delivery)
 
 
 async def _handle_edit_value(
@@ -668,7 +683,9 @@ async def _handle_edit_value(
         await session.commit()
     except (ValueError, ServiceError) as exc:
         text = exc.user_message if isinstance(exc, ServiceError) else str(exc)
-        await notifications.send_text(bot, message.chat.id, escape_markdown_v2(text))
+        await notifications.send_text(
+            bot, message.chat.id, escape_markdown_v2(text), new_message=True
+        )
         return
     await state.clear()
     await _show_raffle(bot, message.chat.id, session, raffle, runtime_settings)
