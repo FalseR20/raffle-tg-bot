@@ -39,8 +39,10 @@ from bot.services.raffles import (
     delete_draft,
     duplicate,
     finish,
+    is_accepting,
     process_schedule,
     purge_archived_receipts,
+    start_now,
     stop_acceptance,
     validate_input,
 )
@@ -162,6 +164,92 @@ async def test_scheduled_raffle_starts_and_respects_current(session_factory):
     async with session_scope(session_factory) as session:
         activated, _, _ = await process_schedule(session, now=datetime.now(UTC))
         assert [item.id for item in activated] == [scheduled.id]
+
+
+async def test_start_now_starts_scheduled_raffle_before_planned_date(session_factory):
+    async with session_scope(session_factory) as session:
+        org = await make_organization(session)
+        raffle = await make_raffle(
+            session,
+            organizations=[org],
+            title="Planned",
+            status=RaffleStatus.SCHEDULED,
+            start_at=datetime.now(UTC) + timedelta(days=2),
+            end_at=datetime.now(UTC) + timedelta(days=3),
+        )
+        raffle_id = raffle.id
+        planned_start_at = raffle.start_at
+
+    now = datetime.now(UTC)
+    async with session_scope(session_factory) as session:
+        raffle_row = await session.get(Raffle, raffle_id)
+        await start_now(session, actor=ADMIN, raffle=raffle_row, now=now)
+
+    async with session_factory() as session:
+        refreshed = await session.get(Raffle, raffle_id)
+        assert refreshed.status is RaffleStatus.ACTIVE
+        assert refreshed.start_at == now
+        assert is_accepting(refreshed, now + timedelta(seconds=1))
+        entry = (
+            await session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "raffle_activated",
+                    AuditLog.raffle_id == raffle_id,
+                )
+            )
+        ).scalar_one()
+        assert entry.payload["reason"] == "manual"
+        assert entry.payload["planned_start_at"] == planned_start_at.isoformat()
+        assert entry.old_status == RaffleStatus.SCHEDULED.value
+        assert entry.new_status == RaffleStatus.ACTIVE.value
+
+
+async def test_start_now_starts_draft_raffle_immediately(session_factory):
+    async with session_scope(session_factory) as session:
+        org = await make_organization(session)
+        raffle = await make_raffle(
+            session,
+            organizations=[org],
+            title="Draft",
+            status=RaffleStatus.DRAFT,
+            start_at=datetime.now(UTC) + timedelta(days=1),
+            end_at=datetime.now(UTC) + timedelta(days=2),
+        )
+        raffle_id = raffle.id
+
+    now = datetime.now(UTC)
+    async with session_scope(session_factory) as session:
+        raffle_row = await session.get(Raffle, raffle_id)
+        await start_now(session, actor=ADMIN, raffle=raffle_row, now=now)
+
+    async with session_factory() as session:
+        refreshed = await session.get(Raffle, raffle_id)
+        assert refreshed.status is RaffleStatus.ACTIVE
+        assert refreshed.start_at == now
+
+
+async def test_start_now_rejects_when_another_raffle_is_current(session_factory):
+    async with session_scope(session_factory) as session:
+        org = await make_organization(session)
+        await make_raffle(session, organizations=[org], title="Current")
+        scheduled = await make_raffle(
+            session,
+            organizations=[org],
+            title="Scheduled",
+            status=RaffleStatus.SCHEDULED,
+            start_at=datetime.now(UTC) + timedelta(days=1),
+            end_at=datetime.now(UTC) + timedelta(days=2),
+        )
+        scheduled_id = scheduled.id
+
+    with pytest.raises(ValidationError):
+        async with session_scope(session_factory) as session:
+            raffle_row = await session.get(Raffle, scheduled_id)
+            await start_now(session, actor=ADMIN, raffle=raffle_row, now=datetime.now(UTC))
+
+    async with session_factory() as session:
+        refreshed = await session.get(Raffle, scheduled_id)
+        assert refreshed.status is RaffleStatus.SCHEDULED
 
 
 async def test_drafts_expire_but_submitted_applications_do_not(session_factory):

@@ -36,6 +36,7 @@ from bot.services.raffles import (
     purge_archived_receipts,
     resume,
     return_to_draft,
+    start_now,
     stop_acceptance,
 )
 from bot.services.storage import ReceiptStorage
@@ -196,12 +197,39 @@ async def on_activate(
     if raffle is None:
         return
     try:
-        await activate(session, actor=permissions, raffle=raffle, now=utcnow())
+        # Older cards may still carry the "Activate" button for a scheduled raffle.
+        if raffle.status is RaffleStatus.SCHEDULED:
+            await start_now(session, actor=permissions, raffle=raffle, now=utcnow())
+        else:
+            await activate(session, actor=permissions, raffle=raffle, now=utcnow())
         await session.commit()
     except ServiceError as exc:
         await callback.answer(exc.user_message, show_alert=True)
         return
     await callback.answer("Розыгрыш активирован")
+    await _show_raffle(bot, callback.message.chat.id, session, raffle, runtime_settings)
+
+
+@router.callback_query(F.data.regexp(r"^adm:raffle_start_now:\d+$"))
+async def on_start_now(
+    callback: CallbackQuery,
+    bot: Bot,
+    session: AsyncSession,
+    permissions: Permissions,
+    runtime_settings,
+) -> None:
+    if callback.message is None:
+        return
+    raffle = await _get_raffle(session, callback)
+    if raffle is None:
+        return
+    try:
+        await start_now(session, actor=permissions, raffle=raffle, now=utcnow())
+        await session.commit()
+    except ServiceError as exc:
+        await callback.answer(exc.user_message, show_alert=True)
+        return
+    await callback.answer("Розыгрыш запущен")
     await _show_raffle(bot, callback.message.chat.id, session, raffle, runtime_settings)
 
 

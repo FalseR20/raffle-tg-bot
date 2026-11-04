@@ -119,13 +119,23 @@ def raffle_card(
     rows: list[list[InlineKeyboardButton]] = []
     if can_manage:
         if status in {RaffleStatus.DRAFT, RaffleStatus.SCHEDULED}:
-            rows.append(
-                [
-                    InlineKeyboardButton(
-                        text="▶️ Активировать", callback_data=f"adm:raffle_activate:{raffle_id}"
-                    )
-                ]
-            )
+            if status is RaffleStatus.SCHEDULED:
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text="▶️ Запустить сейчас",
+                            callback_data=f"adm:raffle_start_now:{raffle_id}",
+                        )
+                    ]
+                )
+            else:
+                rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text="▶️ Активировать", callback_data=f"adm:raffle_activate:{raffle_id}"
+                        )
+                    ]
+                )
         if status is RaffleStatus.ACTIVE:
             rows.append(
                 [

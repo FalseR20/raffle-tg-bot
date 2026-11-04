@@ -258,6 +258,10 @@ Before activation:
 - at least one organization;
 - every selected organization has a name, review chat, and at least one active payment method.
 
+A `scheduled` raffle can be started immediately from the admin card with "Start now". The
+planned `start_at` is then replaced with the current time, so the card, the participant view and
+the deadline checks agree on when acceptance began. The same checks apply.
+
 ### 5.5. Acceptance stop
 
 Two mechanisms:

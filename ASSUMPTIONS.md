@@ -192,3 +192,8 @@ and taxation. The bot does not publish results automatically.
     staff. Organization representatives are described as authorised persons under article 7;
     the operator still has to instruct them outside the bot. The in-bot policy is the document
     participants accept; bump `PRIVACY_VERSION` when its text changes.
+52. **A scheduled raffle can be started immediately.** The admin card shows "Start now" for
+    `scheduled` raffles instead of the no-op "Activate" button. It forces `active` after the
+    usual activation checks and replaces `start_at` with the current time; the original planned
+    date is kept in the audit payload. Drafts still use "Activate", which schedules a future
+    start and activates a past one.

@@ -269,6 +269,49 @@ async def activate(
     return raffle
 
 
+async def start_now(
+    session: AsyncSession, *, actor: Permissions, raffle: Raffle, now: datetime
+) -> Raffle:
+    """Start a draft or scheduled raffle immediately, ignoring the planned start date.
+
+    The planned ``start_at`` is replaced with ``now`` so that the raffle card, the
+    participant view and deadline checks all agree on when acceptance began.
+    """
+    _assert_manage(actor)
+    if raffle.status not in {RaffleStatus.DRAFT, RaffleStatus.SCHEDULED}:
+        raise InvalidStateError("Запустить можно только черновик или запланированный розыгрыш.")
+    problems = await activation_problems(session, raffle)
+    if problems:
+        raise ValidationError(problems[0].message)
+
+    old_status = raffle.status
+    planned_start_at = raffle.start_at
+    if planned_start_at > now:
+        raffle.start_at = now
+    raffle.status = RaffleStatus.ACTIVE
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ValidationError("Уже есть активный розыгрыш.") from exc
+    payload: dict[str, str] = {"reason": "manual"}
+    if planned_start_at > now:
+        payload["planned_start_at"] = planned_start_at.isoformat()
+    await audit_repo.log(
+        session,
+        entity_type="raffle",
+        entity_id=raffle.id,
+        raffle_id=raffle.id,
+        actor_id=actor.user_id,
+        action="raffle_activated",
+        old_status=old_status.value,
+        new_status=RaffleStatus.ACTIVE.value,
+        payload=payload,
+        at=now,
+    )
+    return raffle
+
+
 async def stop_acceptance(
     session: AsyncSession, *, actor: Permissions, raffle: Raffle, now: datetime
 ) -> Raffle:
