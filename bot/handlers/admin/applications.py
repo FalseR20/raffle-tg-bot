@@ -33,7 +33,7 @@ from bot.services.cards import CardDeliveryError, send_receipt_to_chat
 from bot.services.permissions import Permissions
 from bot.services.settings import RuntimeSettings
 from bot.services.storage import ReceiptStorage
-from bot.services.users import chat_url, display_name, mention
+from bot.services.users import chat_url, display_name, has_direct_chat, mention
 from bot.states import ApplicationSearch, ParticipantSearch
 from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2, safe_markdown
@@ -531,10 +531,12 @@ async def on_participants(
         f"Билеты: {raffle.last_ticket_number}\n",
     ]
     for total in participants:
+        direct = await has_direct_chat(bot, total.user)
         lines.append(
             f"{escape_markdown_v2(display_name(total.user))} · ID {total.user_id} · "
             f"{escape_markdown_v2(ru.format_money(total.confirmed_amount))} BYN · "
-            f"{total.tickets_issued} билетов"
+            f"{total.tickets_issued} билетов · "
+            f"{ru.contact_label(total.user.username, direct=direct)}"
         )
     await notifications.send_text(
         bot,
@@ -580,10 +582,17 @@ async def on_participant_search_query(
     if not users:
         await notifications.send_text(bot, message.chat.id, "Участники не найдены\\.")
         return
+    lines = ["👥 Найденные участники:", ""]
+    for user in users:
+        direct = await has_direct_chat(bot, user)
+        lines.append(
+            f"{escape_markdown_v2(display_name(user))} · ID {user.id} · "
+            f"{ru.contact_label(user.username, direct=direct)}"
+        )
     await notifications.send_text(
         bot,
         message.chat.id,
-        "👥 Найденные участники:",
+        "\n".join(lines),
         reply_markup=participants_list([(user.id, display_name(user)) for user in users]),
     )
 
@@ -613,17 +622,21 @@ async def on_participant(
         return
     await callback.answer()
     participant = await users_repo.get(session, user_id)
+    direct = True
+    if participant is not None:
+        direct = await has_direct_chat(bot, participant)
     ranges = await apps_repo.confirmed_ranges(session, raffle.id, user_id)
-    header = f"👤 ID {user_id}"
-    if participant is not None and participant.username:
-        header = f"👤 @{escape_markdown_v2(participant.username)} · ID {user_id}"
-    lines = [
-        header,
-        f"Подтверждено: {_money(total.confirmed_amount if total else 0)} BYN",
-        f"Билеты: {total.tickets_issued if total else 0}",
-        f"Номера: {escape_markdown_v2(ru.ranges_display(ranges))}",
-        f"Заявок: {len(applications)}\n",
-    ]
+    lines = [f"👤 ID {user_id}"]
+    if participant is not None:
+        lines.append(ru.contact_label(participant.username, direct=direct))
+    lines.extend(
+        [
+            f"Подтверждено: {_money(total.confirmed_amount if total else 0)} BYN",
+            f"Билеты: {total.tickets_issued if total else 0}",
+            f"Номера: {escape_markdown_v2(ru.ranges_display(ranges))}",
+            f"Заявок: {len(applications)}\n",
+        ]
+    )
     for application in applications[:10]:
         lines.append(
             f"`{escape_markdown_v2(application.public_id)}` · "
@@ -631,11 +644,15 @@ async def on_participant(
             f"{_money(application.amount)} BYN · "
             f"{escape_markdown_v2(ru.STATUS_LABELS[application.status.value])}"
         )
+    if participant is None:
+        keyboard = participant_card()
+    elif direct:
+        keyboard = participant_card(chat_url=chat_url(participant))
+    else:
+        keyboard = participant_card(contact_callback=f"adm:talk:{participant.id}")
     await notifications.send_text(
         bot,
         callback.message.chat.id,
         "\n".join(lines),
-        reply_markup=participant_card(
-            chat_url=chat_url(participant) if participant is not None else None
-        ),
+        reply_markup=keyboard,
     )

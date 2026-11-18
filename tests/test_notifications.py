@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.services.notifications import editing_target, send_text
 
@@ -67,6 +68,37 @@ async def test_invalid_keyboard_is_retried_without_markup():
     assert not result.used_plain_text
     assert len(bot.calls) == 2
     assert "reply_markup" not in bot.calls[1]
+
+
+async def test_restricted_url_button_keeps_callback_buttons():
+    class RestrictedBot:
+        def __init__(self) -> None:
+            self.calls: list[dict] = []
+
+        async def send_message(self, chat_id, text, **kwargs):
+            self.calls.append({"chat_id": chat_id, "text": text, **kwargs})
+            markup = kwargs.get("reply_markup")
+            if markup is not None and any(
+                button.url for row in markup.inline_keyboard for button in row
+            ):
+                raise TelegramBadRequest(
+                    method=None, message="Bad Request: BUTTON_USER_PRIVACY_RESTRICTED"
+                )
+            return SimpleNamespace(message_id=4)
+
+    markup = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Написать", url="tg://user?id=1")],
+            [InlineKeyboardButton(text="К участникам", callback_data="adm:participants")],
+        ]
+    )
+    bot = RestrictedBot()
+    result = await send_text(bot, 123, "*Текст*", reply_markup=markup)
+    assert result.ok
+    assert len(bot.calls) == 2
+    kept = bot.calls[1]["reply_markup"]
+    assert len(kept.inline_keyboard) == 1
+    assert kept.inline_keyboard[0][0].callback_data == "adm:participants"
 
 
 class EditBot:

@@ -10,6 +10,7 @@ from bot.handlers.admin import (
     insights,
     menu,
     organizations,
+    participant_messages,
     payment_methods,
     raffle_wizard,
     raffles,
@@ -29,6 +30,7 @@ for _module in (
     raffle_wizard,
     applications,
     organizations,
+    participant_messages,
     payment_methods,
     roles,
     exports,
@@ -46,5 +48,6 @@ admin_router.include_router(roles.router)
 admin_router.include_router(exports.router)
 admin_router.include_router(settings.router)
 admin_router.include_router(insights.router)
+admin_router.include_router(participant_messages.router)
 
 __all__ = ["admin_router"]

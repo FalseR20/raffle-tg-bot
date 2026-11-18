@@ -15,7 +15,7 @@ from sqlalchemy import select
 from bot.config import Settings
 from bot.db.enums import ApplicationStatus
 from bot.db.models import Application, User
-from bot.handlers import admin, common, my, participant, receipts, review
+from bot.handlers import admin, common, my, participant, receipts, relay, review
 from bot.middlewares.auth import AuthMiddleware
 from bot.middlewares.db import DbSessionMiddleware
 from bot.middlewares.throttle import ThrottleMiddleware
@@ -169,6 +169,7 @@ def build_dispatcher(session_factory, env: Settings):
     dp.include_router(admin.admin_router)
     dp.include_router(my.router)
     dp.include_router(review.router)
+    dp.include_router(relay.router)
     dp.include_router(participant.router)
     dp.include_router(receipts.router)
     return dp
@@ -373,6 +374,28 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
     assert card_markup.inline_keyboard[0][0].text == "✍️ Написать"
     assert card_markup.inline_keyboard[0][0].url == "https://t.me/u500"
     assert card_markup.inline_keyboard[-1][0].callback_data == "adm:participants"
+
+    # Bot-relayed messaging: the admin writes, the participant answers.
+    bot.messages.clear()
+    await dp.feed_update(bot, _callback(100, "adm:talk:500", 1001))
+    assert any("Сообщение участнику" in text for _, text, _ in bot.messages)
+
+    bot.messages.clear()
+    await dp.feed_update(bot, _message(100, "Здравствуйте, нужен новый чек", 1002))
+    delivered = next(call for call in bot.messages if call[0] == 500)
+    assert "нужен новый чек" in delivered[1]
+    reply_button = delivered[2]["reply_markup"].inline_keyboard[0][0]
+    assert reply_button.callback_data == "relay:reply:100:500"
+
+    bot.messages.clear()
+    await dp.feed_update(bot, _callback(500, "relay:reply:100:500", 1003))
+    assert any(call[0] == 500 for call in bot.messages)
+
+    bot.messages.clear()
+    await dp.feed_update(bot, _message(500, "Отправил новый чек", 1004))
+    answer = next(call for call in bot.messages if call[0] == 100)
+    assert "Отправил новый чек" in answer[1]
+    assert answer[2]["reply_markup"].inline_keyboard[0][0].callback_data == "adm:talk:500"
 
     # Finish the raffle, record a winner and expose results to the participant.
     await dp.feed_update(bot, _callback(100, f"adm:raffle_stop_yes:{raffle.id}", 56))

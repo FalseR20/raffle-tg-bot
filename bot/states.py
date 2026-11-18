@@ -67,6 +67,14 @@ class ParticipantSearch(StatesGroup):
     query = State()
 
 
+class AdminRelay(StatesGroup):
+    compose = State()
+
+
+class ParticipantRelay(StatesGroup):
+    reply = State()
+
+
 class WinnerWizard(StatesGroup):
     place = State()
     ticket = State()

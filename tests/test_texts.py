@@ -151,12 +151,40 @@ TEXTS = [
         created_at=NOW,
         tz=TZ,
     ),
+    ru.relay_prompt_text(user_id=7617766886, name=HOSTILE),
+    ru.relay_to_participant_text("Здравствуйте. Нужен чек за 25 BYN (заявка *A-2026-000022*)."),
+    ru.relay_reply_prompt_text(),
+    ru.relay_to_admin_text(
+        user_id=7617766886, name=HOSTILE, text="Ответ с точкой. И [скобками] (тест)."
+    ),
+    ru.relay_sent_text(),
+    ru.relay_cancelled_text(),
+    ru.relay_empty_text(),
+    ru.relay_too_long_text(),
+    ru.relay_failed_text('Bad Request: "x" [y]'),
+    ru.contact_label("asph0delus", direct=True),
+    ru.contact_label(None, direct=True),
+    ru.contact_label(None, direct=False),
 ]
 
 
 @pytest.mark.parametrize("text", TEXTS)
 def test_all_templates_are_valid_markdown(text):
     validate_markdown_v2(text)
+
+
+def test_relay_identity_does_not_repeat_the_id():
+    assert (
+        ru.relay_to_admin_text(user_id=7, name="ID 7", text="Ответ.")
+        == "💬 *Сообщение от участника*\n\nID 7\n\nОтвет\\."
+    )
+    assert "ID 7 · Иван" in ru.relay_prompt_text(user_id=7, name="Иван")
+
+
+def test_contact_label_describes_reachability():
+    assert ru.contact_label("asph0delus", direct=True) == "Связь: @asph0delus"
+    assert ru.contact_label(None, direct=True) == "Связь: без username"
+    assert ru.contact_label(None, direct=False) == "Связь: пересылка запрещена"
 
 
 def test_safe_markdown_escapes_legacy_invalid_instructions():

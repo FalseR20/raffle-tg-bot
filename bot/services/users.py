@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +12,9 @@ from bot.db.models import User
 from bot.db.repositories import users as users_repo
 from bot.services.settings import RuntimeSettings
 from bot.texts.markdown import escape_markdown_v2
+
+if TYPE_CHECKING:
+    from aiogram import Bot
 
 
 @dataclass(frozen=True)
@@ -129,3 +133,14 @@ def chat_url(user: User) -> str:
     if user.username:
         return f"https://t.me/{user.username}"
     return f"tg://user?id={user.id}"
+
+
+async def has_direct_chat(bot: Bot, user: User) -> bool:
+    """Whether Telegram allows a ``tg://user?id`` button that opens this chat."""
+    if user.username:
+        return True
+    try:
+        chat = await bot.get_chat(user.id)
+    except Exception:
+        return True
+    return not bool(getattr(chat, "has_private_forwards", False))

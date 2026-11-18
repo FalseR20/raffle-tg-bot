@@ -439,3 +439,65 @@ def results_text(
         lines.append("")
         lines.append("Ваши номера не вошли в список победителей\\.")
     return "\n".join(lines)
+
+
+RELAY_MESSAGE_LIMIT = 1800
+
+
+def _relay_identity(user_id: int, name: str) -> str:
+    if not name or name == f"ID {user_id}":
+        return f"ID {esc(str(user_id))}"
+    return f"ID {esc(str(user_id))} · {esc(name)}"
+
+
+def relay_prompt_text(*, user_id: int, name: str) -> str:
+    return (
+        f"✉️ *Сообщение участнику*\n\n"
+        f"{_relay_identity(user_id, name)}\n\n"
+        "Введите текст сообщения\\. Оно придёт участнику от имени бота\\."
+    )
+
+
+def relay_to_participant_text(text: str) -> str:
+    return (
+        "💬 *Сообщение от организатора розыгрыша*\n\n"
+        f"{esc(text)}\n\n"
+        "_Нажмите кнопку, чтобы ответить\\._"
+    )
+
+
+def relay_reply_prompt_text() -> str:
+    return "✍️ *Ответ организатору*\n\nНапишите сообщение — оно уйдёт тому, кто вам написал\\."
+
+
+def relay_to_admin_text(*, user_id: int, name: str, text: str) -> str:
+    return f"💬 *Сообщение от участника*\n\n{_relay_identity(user_id, name)}\n\n{esc(text)}"
+
+
+def relay_sent_text() -> str:
+    return "✅ Сообщение отправлено\\."
+
+
+def relay_cancelled_text() -> str:
+    return "Отправка отменена\\."
+
+
+def relay_empty_text() -> str:
+    return "Текст сообщения пуст\\."
+
+
+def relay_too_long_text(limit: int = RELAY_MESSAGE_LIMIT) -> str:
+    return f"Слишком длинное сообщение\\. Максимум {limit} символов\\."
+
+
+def relay_failed_text(error: str) -> str:
+    return f"❌ Не удалось отправить сообщение: {esc(error)}"
+
+
+def contact_label(username: str | None, *, direct: bool) -> str:
+    """How the admin can reach a participant."""
+    if username:
+        return f"Связь: @{esc(username)}"
+    if direct:
+        return "Связь: без username"
+    return "Связь: пересылка запрещена"

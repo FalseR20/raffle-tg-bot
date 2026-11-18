@@ -16,7 +16,7 @@ from sqlalchemy import text
 from bot.config import ConfigurationError, Settings, get_settings
 from bot.db.session import create_engine, create_session_factory, session_scope
 from bot.handlers import admin as admin_handlers
-from bot.handlers import common, my, participant, receipts, review
+from bot.handlers import common, my, participant, receipts, relay, review
 from bot.health import start_health_server
 from bot.logging import configure_logging
 from bot.middlewares.auth import AuthMiddleware
@@ -111,6 +111,7 @@ async def run() -> None:
     dispatcher.include_router(admin_handlers.admin_router)
     dispatcher.include_router(my.router)
     dispatcher.include_router(review.router)
+    dispatcher.include_router(relay.router)
     dispatcher.include_router(participant.router)
     dispatcher.include_router(receipts.router)
 

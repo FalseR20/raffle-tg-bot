@@ -202,3 +202,14 @@ and taxation. The bot does not publish results automatically.
     prompt. Commands still send a new message. Notifications, receipts, review cards and
     deliberately multi-part output (policy pages, the per-application lines in "My
     applications") stay as separate messages.
+
+54. **Admin ↔ participant messaging goes through the bot.** A participant card offers a direct
+    `t.me`/`tg://user?id` link only when Telegram allows it. For accounts without a username and
+    with restricted forwarded messages (`has_private_forwards`, error
+    `BUTTON_USER_PRIVACY_RESTRICTED`) the card shows "Написать через бота": the admin types a
+    message (up to 1800 characters), the bot delivers it, and the participant answers with a
+    button. The reply returns to the admin who started the conversation. Message bodies are not
+    stored; the audit log keeps only the direction and participants of the exchange. The
+    participants list, search results and the participant card show `Связь: @username`,
+    `Связь: без username` or `Связь: пересылка запрещена`. If Telegram rejects a URL button,
+    the message is resent with the URL button removed and callback buttons kept.

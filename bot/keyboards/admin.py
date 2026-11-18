@@ -703,11 +703,17 @@ def audit_actions() -> InlineKeyboardMarkup:
     )
 
 
-def participant_card(*, chat_url: str | None = None) -> InlineKeyboardMarkup:
-    """Participant detail: open a direct chat, then go back to the list."""
+def participant_card(
+    *, chat_url: str | None = None, contact_callback: str | None = None
+) -> InlineKeyboardMarkup:
+    """Participant detail: open a direct chat or relay through the bot."""
     rows: list[list[InlineKeyboardButton]] = []
     if chat_url is not None:
         rows.append([InlineKeyboardButton(text="✍️ Написать", url=chat_url)])
+    elif contact_callback is not None:
+        rows.append(
+            [InlineKeyboardButton(text="✉️ Написать через бота", callback_data=contact_callback)]
+        )
     rows.append([InlineKeyboardButton(text="⬅️ К участникам", callback_data="adm:participants")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

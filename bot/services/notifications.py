@@ -32,6 +32,21 @@ RETRY_DELAYS = (0.5, 1.5, 3.0)
 _edit_target: ContextVar[tuple[int, int] | None] = ContextVar("edit_target", default=None)
 
 
+def _without_url_buttons(markup) -> InlineKeyboardMarkup | None:
+    """Keep callback buttons when Telegram rejects a URL button.
+
+    ``BUTTON_USER_PRIVACY_RESTRICTED`` and ``BUTTON_URL_INVALID`` reject the
+    whole keyboard, which used to remove navigation buttons as well.
+    """
+    if not isinstance(markup, InlineKeyboardMarkup):
+        return None
+    rows = [[button for button in row if button.url is None] for row in markup.inline_keyboard]
+    rows = [row for row in rows if row]
+    if not rows:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 @contextmanager
 def editing_target(chat_id: int, message_id: int) -> Iterator[None]:
     """Edit this message with ``send_text`` calls made inside the block."""
@@ -108,17 +123,20 @@ async def send_text(
     except TelegramBadRequest as exc:
         if not fallback or "parse" not in str(exc).lower():
             if "reply_markup" in kwargs:
-                logger.warning("Message rejected with reply markup; retrying without it: %s", exc)
-                without_markup = {
+                logger.warning("Message rejected with reply markup; retrying reduced: %s", exc)
+                retry_kwargs = {
                     key: value for key, value in kwargs.items() if key != "reply_markup"
                 }
+                reduced = _without_url_buttons(kwargs["reply_markup"])
+                if reduced is not None:
+                    retry_kwargs["reply_markup"] = reduced
                 try:
                     message = await _send_with_retry(
                         bot,
                         chat_id,
                         truncate(text, MESSAGE_LIMIT),
                         parse_mode="MarkdownV2",
-                        **without_markup,
+                        **retry_kwargs,
                     )
                     return DeliveryResult(message=message, used_plain_text=False)
                 except Exception as retry_exc:
