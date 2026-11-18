@@ -13,12 +13,16 @@ from bot.services import notifications
 
 
 class EditCurrentMessageMiddleware(BaseMiddleware):
-    """Turn ``send_text`` calls into edits of the message that started the flow.
+    """Turn ``send_text`` calls made by a button callback into edits.
 
-    Applies to private-chat callbacks and to replies given while an input state
-    is active. Commands and messages outside an active state keep the old
-    behaviour and send a new message.
+    Button presses replace the message that carries the button. Text and media
+    input always send a new message, so the instructions and the previous bot
+    reply stay in the chat. ``edit_on_input=False`` disables the input branch
+    for flows where the prompt must remain readable (payment instructions).
     """
+
+    def __init__(self, *, edit_on_input: bool = True) -> None:
+        self.edit_on_input = edit_on_input
 
     async def __call__(
         self,
@@ -41,6 +45,8 @@ class EditCurrentMessageMiddleware(BaseMiddleware):
             if isinstance(state, FSMContext):
                 await state.update_data(ui_message_id=message.message_id)
             return message.chat.id, message.message_id
+        if not self.edit_on_input:
+            return None
         if not isinstance(event, Message) or event.chat.type != "private":
             return None
         text = event.text or event.caption or ""

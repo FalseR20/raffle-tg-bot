@@ -187,6 +187,14 @@ def test_contact_label_describes_reachability():
     assert ru.contact_label(None, direct=False) == "Связь: пересылка запрещена"
 
 
+def test_receipt_errors_explain_the_next_step():
+    assert "сумму" in ru.receipt_needs_amount_text()
+    assert "уже отправлен" in ru.receipt_already_sent_text()
+    download_error = ru.receipt_download_failed_text()
+    assert "Telegram" in download_error
+    assert "10 минут" in download_error
+
+
 def test_safe_markdown_escapes_legacy_invalid_instructions():
     invalid = "Там сям (номер) 1234"
     assert safe_markdown(invalid) == "Там сям \\(номер\\) 1234"

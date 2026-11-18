@@ -1,7 +1,8 @@
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import BotCommand
 
 from bot.db.enums import RaffleStatus
-from bot.main import bot_commands
+from bot.main import _clear_webhook, bot_commands
 from bot.services.permissions import Permissions
 
 
@@ -94,3 +95,26 @@ def test_org_rep_menu_does_not_show_raffle_shortcuts():
     ).inline_keyboard
     callbacks = [button.callback_data for row in rows for button in row]
     assert "adm:raffle:7" not in callbacks
+
+
+class _TimeoutBot:
+    async def delete_webhook(self, **kwargs):
+        raise TelegramNetworkError(method=None, message="Request timeout error")
+
+
+async def test_clear_webhook_survives_telegram_timeout():
+    await _clear_webhook(_TimeoutBot())
+
+
+class _CalledBot:
+    def __init__(self) -> None:
+        self.called = False
+
+    async def delete_webhook(self, **kwargs):
+        self.called = True
+
+
+async def test_clear_webhook_deletes_webhook_when_reachable():
+    bot = _CalledBot()
+    await _clear_webhook(bot)
+    assert bot.called

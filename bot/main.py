@@ -9,6 +9,7 @@ from contextlib import suppress
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.exceptions import TelegramNetworkError, TelegramServerError
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 from sqlalchemy import text
@@ -64,6 +65,14 @@ def bot_commands() -> list[BotCommand]:
         BotCommand(command="privacy", description="Политика конфиденциальности"),
         BotCommand(command="admin", description="Админ-панель"),
     ]
+
+
+async def _clear_webhook(bot: Bot) -> None:
+    """Best-effort webhook cleanup; polling must start even during API outages."""
+    try:
+        await bot.delete_webhook(drop_pending_updates=False)
+    except (TelegramNetworkError, TelegramServerError) as exc:
+        logger.warning("Could not delete the webhook before polling: %s", exc)
 
 
 async def run() -> None:
@@ -140,7 +149,7 @@ async def run() -> None:
         if env.webhook_url:
             await _run_webhook(env, bot, dispatcher, health_server)
         else:
-            await bot.delete_webhook(drop_pending_updates=False)
+            await _clear_webhook(bot)
             await dispatcher.start_polling(
                 bot, allowed_updates=dispatcher.resolve_used_update_types()
             )

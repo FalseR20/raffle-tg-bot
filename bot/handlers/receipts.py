@@ -33,8 +33,8 @@ from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
 
 router = Router(name="participant_receipts")
-router.callback_query.outer_middleware(EditCurrentMessageMiddleware())
-router.message.outer_middleware(EditCurrentMessageMiddleware())
+router.callback_query.outer_middleware(EditCurrentMessageMiddleware(edit_on_input=False))
+router.message.outer_middleware(EditCurrentMessageMiddleware(edit_on_input=False))
 logger = get_logger(__name__)
 
 

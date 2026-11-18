@@ -198,8 +198,9 @@ and taxation. The bot does not publish results automatically.
     date is kept in the audit payload. Drafts still use "Activate", which schedules a future
     start and activates a past one.
 53. **One live UI message per flow.** In a private chat, a callback replaces the message that
-    carries the button, and text input inside an active wizard flow replaces the last bot
-    prompt. Commands still send a new message. Notifications, receipts, review cards and
+    carries the button. In participant flows (amount, receipt) text and media input send a new
+    message, so the payment instructions and the previous prompt stay visible; admin wizards
+    still replace the last prompt on input. Notifications, receipts, review cards and
     deliberately multi-part output (policy pages, the per-application lines in "My
     applications") stay as separate messages.
 

@@ -15,6 +15,7 @@ from bot.db.models import Application
 from bot.db.repositories import applications as apps_repo
 from bot.db.repositories import audit as audit_repo
 from bot.db.repositories import raffles as raffles_repo
+from bot.logging import get_logger
 from bot.services import applications as applications_service
 from bot.services import receipts as receipts_service
 from bot.services.applications import attach_receipt
@@ -25,6 +26,9 @@ from bot.services.errors import (
     StorageError,
 )
 from bot.services.storage import ReceiptStorage
+from bot.texts import ru
+
+logger = get_logger(__name__)
 
 DownloadFn = Callable[[str], Awaitable[bytes]]
 
@@ -67,7 +71,13 @@ async def accept_receipt(
     if current is None or current.user_id != user_id:
         raise InvalidStateError("Заявка не найдена.")
     if current.status.value not in {"awaiting_receipt", "revision_requested"}:
-        raise InvalidStateError("Сейчас нельзя прикрепить чек.")
+        if current.status.value == "draft":
+            raise InvalidStateError(ru.receipt_needs_amount_text())
+        if current.status.value == "pending_review":
+            raise InvalidStateError(ru.receipt_already_sent_text())
+        if current.status.value == "confirmed":
+            raise InvalidStateError(ru.receipt_already_confirmed_text())
+        raise InvalidStateError(ru.receipt_wrong_state_text())
 
     raffle = await raffles_repo.get(session, current.raffle_id)
     if raffle is None or raffle.status.value not in {"active", "closed"}:
@@ -170,7 +180,8 @@ async def _download(download: DownloadFn, file_id: str) -> bytes:
     try:
         data = await download(file_id)
     except Exception as exc:
-        raise ReceiptError("Не удалось скачать файл из Telegram. Попробуйте ещё раз.") from exc
+        logger.warning("Receipt download from Telegram failed: %s", exc)
+        raise ReceiptError(ru.receipt_download_failed_text()) from exc
     if not data:
-        raise ReceiptError("Не удалось скачать файл из Telegram.")
+        raise ReceiptError(ru.receipt_empty_file_text())
     return data

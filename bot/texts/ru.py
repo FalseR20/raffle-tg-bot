@@ -136,10 +136,10 @@ def payment_instructions_text(
         f"{safe_markdown(payment_instructions)}\n\n"
         f"🔖 Код платежа: `{esc(payment_code)}`\n"
         "Добавьте код в назначение платежа, если банк позволяет\\.\n\n"
-        "После перевода введите отправленную сумму в BYN\\.\n"
         f"Минимум — *{esc(format_money(min_amount))} BYN*\\. "
-        f"1 билет за каждые *{esc(format_money(ticket_price))} BYN*\\.\n\n"
-        "Перевод идёт напрямую организации\\. Бот не принимает деньги\\."
+        f"1 билет за каждые *{esc(format_money(ticket_price))} BYN*\\.\n"
+        "Перевод идёт напрямую организации\\. Бот не принимает деньги\\.\n\n"
+        "*Дальше: переведите сумму и отправьте её сюда числом — например 25\\.*"
     )
 
 
@@ -174,11 +174,9 @@ def amount_preview_text(
         f"С учётом подтверждённых {esc(format_money(current_amount))} BYN "
         f"итог — {esc(format_money(preview_amount))} BYN \\= {tickets_label(preview_tickets)}\\.\n"
         f"После проверки чека начислим ещё {numbers_label(preview_delta)}\\.\n\n"
-        "📎 Пришлите чек одним файлом:\n"
-        "• фото в Telegram;\n"
-        "• PDF\\-документ;\n"
-        "• изображение JPEG/PNG в документе\\.\n\n"
-        "На чеке должны быть видны получатель, сумма, дата и статус операции\\."
+        "На чеке должны быть видны получатель, сумма, дата и статус операции\\.\n"
+        "Подойдёт фото, PDF\\-документ или JPEG/PNG в документе\\.\n\n"
+        "*Дальше: пришлите чек одним файлом\\.*"
     )
 
 
@@ -191,6 +189,37 @@ def invalid_file_text() -> str:
 
 def file_too_large_text(max_mb: int) -> str:
     return f"❌ Файл слишком большой\\. Максимальный размер — {max_mb} МБ\\."
+
+
+# The following receipt errors are plain text: `on_receipt` escapes them.
+def receipt_needs_amount_text() -> str:
+    return (
+        "❌ Сначала укажите сумму пожертвования: отправьте её сюда числом, "
+        "например 25. После этого бот попросит прикрепить чек."
+    )
+
+
+def receipt_already_sent_text() -> str:
+    return "❌ Чек по этой заявке уже отправлен и ждёт проверки."
+
+
+def receipt_already_confirmed_text() -> str:
+    return "✅ Заявка уже подтверждена, повторно прикреплять чек не нужно."
+
+
+def receipt_wrong_state_text() -> str:
+    return "❌ Сейчас нельзя прикрепить чек. Откройте /my и проверьте статус заявки."
+
+
+def receipt_download_failed_text() -> str:
+    return (
+        "❌ Telegram сейчас не отдаёт файлы — это сбой на стороне Telegram. "
+        "Подождите примерно 10 минут и пришлите чек ещё раз."
+    )
+
+
+def receipt_empty_file_text() -> str:
+    return "❌ Telegram вернул пустой файл. Подождите пару минут и пришлите чек ещё раз."
 
 
 def pending_review_text(

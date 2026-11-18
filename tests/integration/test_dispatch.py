@@ -241,10 +241,17 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
     assert any("Код платежа" in text for _, text, _ in bot.messages)
 
     bot.messages.clear()
+    bot.sent_count = 0
+    bot.edit_count = 0
     await dp.feed_update(bot, _message(500, "9", 9))
     assert any("После проверки чека" in text for _, text, _ in bot.messages)
+    assert any("Дальше: пришлите чек" in text for _, text, _ in bot.messages)
+    assert bot.edit_count == 0
+    assert bot.sent_count == 1
 
     bot.messages.clear()
+    bot.sent_count = 0
+    bot.edit_count = 0
     pdf = _pdf_bytes()
     user = _user(500)
     document_message = Message(
@@ -262,6 +269,7 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
     )
     await dp.feed_update(bot, Update(update_id=11, message=document_message))
     assert any("отправлена на проверку" in text for _, text, _ in bot.messages)
+    assert bot.edit_count == 0
 
     bot.messages.clear()
     async with session_factory() as session:

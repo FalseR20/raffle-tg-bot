@@ -46,8 +46,8 @@ from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2
 
 router = Router(name="participant")
-router.callback_query.outer_middleware(EditCurrentMessageMiddleware())
-router.message.outer_middleware(EditCurrentMessageMiddleware())
+router.callback_query.outer_middleware(EditCurrentMessageMiddleware(edit_on_input=False))
+router.message.outer_middleware(EditCurrentMessageMiddleware(edit_on_input=False))
 
 
 async def _assert_consent(bot: Bot, chat_id: int, user: User, settings: RuntimeSettings) -> bool:
