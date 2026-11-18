@@ -703,6 +703,15 @@ def audit_actions() -> InlineKeyboardMarkup:
     )
 
 
+def participant_card(*, chat_url: str | None = None) -> InlineKeyboardMarkup:
+    """Participant detail: open a direct chat, then go back to the list."""
+    rows: list[list[InlineKeyboardButton]] = []
+    if chat_url is not None:
+        rows.append([InlineKeyboardButton(text="✍️ Написать", url=chat_url)])
+    rows.append([InlineKeyboardButton(text="⬅️ К участникам", callback_data="adm:participants")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def participants_list(entries: list[tuple[int, str]]) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text=label[:50], callback_data=f"adm:part:{user_id}")]

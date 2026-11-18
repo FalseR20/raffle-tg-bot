@@ -24,6 +24,7 @@ from bot.db.repositories import users as users_repo
 from bot.keyboards.admin import (
     application_card,
     applications_menu,
+    participant_card,
     participants_list,
 )
 from bot.services import applications as applications_service
@@ -32,7 +33,7 @@ from bot.services.cards import CardDeliveryError, send_receipt_to_chat
 from bot.services.permissions import Permissions
 from bot.services.settings import RuntimeSettings
 from bot.services.storage import ReceiptStorage
-from bot.services.users import display_name, mention
+from bot.services.users import chat_url, display_name, mention
 from bot.states import ApplicationSearch, ParticipantSearch
 from bot.texts import ru
 from bot.texts.markdown import escape_markdown_v2, safe_markdown
@@ -611,9 +612,13 @@ async def on_participant(
         await callback.answer("Участник не найден", show_alert=True)
         return
     await callback.answer()
+    participant = await users_repo.get(session, user_id)
     ranges = await apps_repo.confirmed_ranges(session, raffle.id, user_id)
+    header = f"👤 ID {user_id}"
+    if participant is not None and participant.username:
+        header = f"👤 @{escape_markdown_v2(participant.username)} · ID {user_id}"
     lines = [
-        f"👤 ID {user_id}",
+        header,
         f"Подтверждено: {_money(total.confirmed_amount if total else 0)} BYN",
         f"Билеты: {total.tickets_issued if total else 0}",
         f"Номера: {escape_markdown_v2(ru.ranges_display(ranges))}",
@@ -630,9 +635,7 @@ async def on_participant(
         bot,
         callback.message.chat.id,
         "\n".join(lines),
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="⬅️ К участникам", callback_data="adm:participants")]
-            ]
+        reply_markup=participant_card(
+            chat_url=chat_url(participant) if participant is not None else None
         ),
     )

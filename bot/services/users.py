@@ -122,3 +122,10 @@ def mention(user: User) -> str:
         return escape_markdown_v2(f"@{user.username}")
     full_name = display_name(user)
     return f"[{escape_markdown_v2(full_name)}](tg://user?id={user.id})"
+
+
+def chat_url(user: User) -> str:
+    """Return a Telegram URL that opens a private chat with the user."""
+    if user.username:
+        return f"https://t.me/{user.username}"
+    return f"tg://user?id={user.id}"

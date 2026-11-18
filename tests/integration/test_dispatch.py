@@ -366,6 +366,14 @@ async def test_dispatch_smoke(session_factory, env_settings, monkeypatch):
     ):
         await dp.feed_update(bot, _callback(100, callback_data, update_id))
 
+    # Participant card offers a direct chat button above the back button.
+    bot.messages.clear()
+    await dp.feed_update(bot, _callback(100, "adm:part:500", 1000))
+    card_markup = bot.messages[-1][2]["reply_markup"]
+    assert card_markup.inline_keyboard[0][0].text == "✍️ Написать"
+    assert card_markup.inline_keyboard[0][0].url == "https://t.me/u500"
+    assert card_markup.inline_keyboard[-1][0].callback_data == "adm:participants"
+
     # Finish the raffle, record a winner and expose results to the participant.
     await dp.feed_update(bot, _callback(100, f"adm:raffle_stop_yes:{raffle.id}", 56))
     await dp.feed_update(bot, _callback(100, f"adm:raffle_finish_yes:{raffle.id}:0", 57))
